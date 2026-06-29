@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>谷歌账号格式转换器</title>
+    <meta name="description" content="100%本地运行的谷歌账号格式批量转换工具，支持多种分隔符智能识别，隐私安全有保障">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <!-- Use system UI fonts for true Apple feel, fallback to Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        :root {
+            /* Apple Light Mode Palette */
+            --bg-color: #f5f5f7; /* Classic Apple light grey background */
+            --card-bg: #ffffff;
+            --border-color: rgba(0, 0, 0, 0.08);
+            --border-active: #0071e3; /* Apple Blue */
+            
+            --text-primary: #1d1d1f;
+            --text-secondary: #86868b;
+            --text-dim: #a1a1a6;
+            
+            --accent: #0071e3;
+            --accent-hover: #0077ED;
+            --success: #34c759; /* Apple Green */
+            --warning: #ff9f0a; /* Apple Orange */
+            --danger: #ff3b30;  /* Apple Red */
+            
+            --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.04);
+            --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.06);
+            --shadow-lg: 0 8px 30px rgba(0, 0, 0, 0.08);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+        body {
+            /* Apple standard font stack */
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", "Inter", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            min-height: 100vh;
+            min-height: 100dvh;
+            padding: 1.5rem 1rem 4rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 640px;
+            display: flex;
+            flex-direction: column;
+            gap: 1.2rem;
+        }
+
+        /* ─── Header ─── */
+        header {
+            text-align: center;
+            padding: 1rem 0 0.5rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .logo-icon {
+            width: 56px; height: 56px;
+            border-radius: 16px;
+            background: #ffffff;
+            box-shadow: var(--shadow-sm);
+            display: flex; align-items: center; justify-content: center;
+            margin-bottom: 0.5rem;
+        }
+        .logo-icon i { font-size: 1.6rem; color: var(--accent); }
+
+        h1 {
+            font-size: 1.4rem; font-weight: 700; letter-spacing: -0.015em;
+            color: var(--text-primary);
+        }
+        .subtitle { font-size: 0.85rem; color: var(--text-secondary); }
+
+        /* ─── Nav Link ─── */
+        .nav-link {
+            display: inline-flex; align-items: center; gap: 6px;
+            color: var(--accent); text-decoration: none;
+            font-size: 0.85rem; font-weight: 500;
+            padding: 0.5rem 1rem;
+            background: #ffffff;
+            border-radius: 20px;
+            box-shadow: var(--shadow-sm);
+            transition: all 0.2s;
+        }
+        .nav-link:active { background: #f5f5f7; transform: scale(0.97); }
+
+        /* ─── Apple Style Cards ─── */
+        .card {
+            background: var(--card-bg);
+            border-radius: 20px;
+            padding: 1.25rem;
+            display: flex; flex-direction: column; gap: 0.8rem;
+            box-shadow: var(--shadow-md);
+            transition: box-shadow 0.3s ease;
+        }
+        
+        /* ─── Section Title ─── */
+        .section-title {
+            display: flex; justify-content: space-between; align-items: center;
+            font-size: 0.95rem; font-weight: 600;
+            color: var(--text-primary);
+        }
+        .section-title .label {
+            display: flex; align-items: center; gap: 0.5rem;
+        }
+        
+        .mode-badge {
+            font-size: 0.75rem; font-weight: 600;
+            background: #f0f8ff; /* Light blue tint */
+            padding: 0.25rem 0.7rem; border-radius: 20px;
+            color: var(--accent);
+            display: flex; align-items: center; gap: 4px;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        .mode-badge.show { opacity: 1; }
+
+        /* ─── Textarea Wrappers ─── */
+        .input-wrapper, .output-wrapper {
+            position: relative;
+            width: 100%;
+        }
+
+        textarea {
+            width: 100%;
+            background: #fbfbfd; /* Extremely light grey, almost white */
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 1rem;
+            color: var(--text-primary);
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            font-size: 0.85rem;
+            line-height: 1.6;
+            resize: none;
+            outline: none;
+            transition: all 0.2s;
+            -webkit-appearance: none;
+        }
+        #inputText { height: 140px; }
+        #outputText { height: 180px; padding-right: 3.5rem; }
+        
+        textarea:focus {
+            border-color: var(--accent);
+            background: #ffffff;
+            box-shadow: 0 0 0 4px rgba(0, 113, 227, 0.15); /* Apple focus ring */
+        }
+        textarea::placeholder { color: #c1c1c6; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
+
+        /* ─── Floating Actions ─── */
+        .clear-btn {
+            position: absolute;
+            top: 10px; right: 10px;
+            background: #e5e5ea;
+            border: none; border-radius: 50%;
+            color: var(--text-secondary);
+            width: 28px; height: 28px;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            z-index: 5;
+            font-size: 0.8rem;
+        }
+        .clear-btn:active { transform: scale(0.9); background: #d1d1d6; }
+
+        .floating-copy-btn {
+            position: absolute;
+            bottom: 12px; right: 12px;
+            background: var(--accent);
+            border: none; border-radius: 50%; /* Perfect circle for Apple style */
+            color: white;
+            width: 44px; height: 44px;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(0, 113, 227, 0.3);
+            transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            z-index: 10;
+            font-size: 1.1rem;
+        }
+        .floating-copy-btn:active { transform: scale(0.9); background: var(--accent-hover); }
+        .floating-copy-btn.copied {
+            background: var(--success);
+            box-shadow: 0 4px 12px rgba(52, 199, 89, 0.3);
+        }
+
+        /* ─── Stats Mini ─── */
+        .stats-mini {
+            display: flex; justify-content: space-between;
+            font-size: 0.8rem; color: var(--text-secondary);
+            padding: 0 0.5rem;
+        }
+        .stats-mini span strong { color: var(--text-primary); font-weight: 600; font-variant-numeric: tabular-nums; }
+
+        /* ─── Clipboard Warning ─── */
+        .clipboard-warning-banner {
+            display: none;
+            background: #fff8e6;
+            border-radius: 12px;
+            padding: 0.8rem 1rem;
+            align-items: flex-start; gap: 0.6rem;
+            margin-top: 0.5rem;
+        }
+        .clipboard-warning-banner.show { display: flex; }
+        .clipboard-warning-banner i { color: var(--warning); font-size: 1rem; margin-top: 0.1rem; }
+        .banner-text { font-size: 0.8rem; color: #8a6a1c; line-height: 1.5; }
+        .banner-text strong { color: #5c450e; }
+
+        /* ─── Toast ─── */
+        .toast {
+            position: fixed; top: 2rem; left: 50%;
+            transform: translate(-50%, -100px);
+            padding: 0.8rem 1.5rem;
+            border-radius: 30px;
+            font-weight: 600; font-size: 0.9rem;
+            box-shadow: var(--shadow-lg);
+            opacity: 0;
+            transition: all 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            z-index: 2000;
+            display: flex; align-items: center; gap: 0.6rem;
+            color: white;
+            backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+        }
+        .toast.show { transform: translate(-50%, 0); opacity: 1; }
+
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <header>
+            <div class="logo-icon"><i class="fa-solid fa-wand-magic-sparkles"></i></div>
+            <h1>格式转换器</h1>
+            <p class="subtitle">极致纯净 · 全自动化</p>
+        </header>
+
+        <div style="display: flex; justify-content: center; margin-bottom: 0.5rem;">
+            <a href="index.html" class="nav-link">
+                <i class="fa-solid fa-house"></i> 返回主页
+            </a>
+        </div>
+
+        <div class="card">
+            <div class="section-title">
+                <div class="label">
+                    <i class="fa-regular fa-paste" style="color: var(--text-secondary);"></i> 粘贴源数据
+                </div>
+                <div id="modeBadge" class="mode-badge">
+                    <i class="fa-solid fa-bolt"></i> <span id="modeText">智能识别</span>
+                </div>
+            </div>
+            
+            <div class="input-wrapper">
+                <textarea id="inputText" placeholder="请在此粘贴需要转换的内容...&#10;&#10;系统将自动识别格式并瞬间转换：&#10;- 如果粘贴包含 | 或 空格 → 自动提纯前4项转为 ---&#10;- 如果粘贴包含 --- → 自动还原为 |" oninput="handleInput()"></textarea>
+                <button class="clear-btn" onclick="clearAll()" title="清空">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div class="stats-mini">
+                <span id="inputStats">行数: 0</span>
+            </div>
+        </div>
+
+        <div class="card" id="outputPanel" style="display: none;">
+            <div class="section-title">
+                <div class="label" style="color: var(--success);">
+                    <i class="fa-solid fa-check-circle"></i> 转换结果
+                </div>
+            </div>
+
+            <div class="output-wrapper">
+                <textarea id="outputText" readonly></textarea>
+                <!-- 悬浮一键复制按钮 -->
+                <button class="floating-copy-btn" id="copyBtn" onclick="executeCopy()">
+                    <i class="fa-regular fa-copy" id="copyIcon"></i>
+                </button>
+            </div>
+
+            <div class="stats-mini">
+                <span id="outputStats">成功: <strong>0</strong> 行</span>
+                <span id="skipStats">忽略: <strong>0</strong> 行</span>
+            </div>
+
+            <div id="copyWarningBanner" class="clipboard-warning-banner">
+                <i class="fa-solid fa-circle-info"></i>
+                <div class="banner-text">
+                    由于浏览器限制未能自动复制，已为您<strong>全选文字</strong>，请长按文本框点击<strong>「拷贝」</strong>。
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast" class="toast"></div>
+
+    <script>
+        const inputText = document.getElementById('inputText');
+        const outputText = document.getElementById('outputText');
+        const outputPanel = document.getElementById('outputPanel');
+        const modeBadge = document.getElementById('modeBadge');
+        const modeText = document.getElementById('modeText');
+        const toast = document.getElementById('toast');
+        let toastTimer = null;
+
+        // 触觉反馈辅助函数
+        function triggerHaptic(type = 'light') {
+            if (navigator.vibrate) {
+                if (type === 'light') navigator.vibrate([20]);
+                if (type === 'success') navigator.vibrate([30, 20, 30]);
+                if (type === 'clear') navigator.vibrate([15, 15]);
+            }
+        }
+
+        // 实时输入处理
+        function handleInput() {
+            const text = inputText.value;
+            const inLines = text.split('\n').length;
+            document.getElementById('inputStats').innerHTML = `行数: <strong>${text ? inLines : 0}</strong>`;
+            
+            if (!text.trim()) {
+                outputPanel.style.display = 'none';
+                modeBadge.classList.remove('show');
+                return;
+            }
+
+            triggerHaptic('light');
+
+            // 智能格式嗅探
+            const dashCount = (text.match(/---/g) || []).length;
+            const pipeCount = (text.match(/\|/g) || []).length;
+            
+            let currentMode = 'forward';
+            if (dashCount > 0 && dashCount > pipeCount) {
+                currentMode = 'reverse';
+            }
+
+            // 更新徽章
+            modeBadge.classList.add('show');
+            if (currentMode === 'forward') {
+                modeText.innerText = "智能提纯过滤";
+                modeBadge.style.color = "var(--accent)";
+                modeBadge.style.background = "#e6f2fd";
+            } else {
+                modeText.innerText = "原样还原";
+                modeBadge.style.color = "var(--warning)";
+                modeBadge.style.background = "#fff5e6";
+            }
+
+            // 转换逻辑
+            const lines = text.split(/\r?\n/);
+            const convertedLines = [];
+            let skippedCount = 0;
+
+            if (currentMode === 'forward') {
+                lines.forEach(line => {
+                    const trimmed = line.trim();
+                    if (!trimmed) { skippedCount++; return; }
+
+                    let parts = [];
+                    if (trimmed.includes('|')) parts = trimmed.split('|');
+                    else if (trimmed.includes('\t')) parts = trimmed.split('\t');
+                    else parts = [trimmed];
+
+                    parts = parts.map(p => p.trim()).filter(p => p !== '');
+                    
+                    const email = parts[0] || '';
+                    const pwd = parts[1] || '';
+                    const rec = parts[2] || '';
+                    const code = parts[3] || '';
+
+                    if (email) {
+                        // 只提取前 4 个核心字段，丢弃多余杂质
+                        let result = `${email}---${pwd}---${rec}---${code}`;
+                        convertedLines.push(result);
+                    } else {
+                        skippedCount++;
+                    }
+                });
+            } else { // reverse mode
+                lines.forEach(line => {
+                    const trimmed = line.trim();
+                    if (!trimmed) { skippedCount++; return; }
+                    const parts = trimmed.split('---').map(p => p.trim());
+                    if (parts.length > 0 && parts[0]) convertedLines.push(parts.join('|'));
+                    else skippedCount++;
+                });
+            }
+
+            if (convertedLines.length > 0) {
+                outputText.value = convertedLines.join('\n');
+                document.getElementById('outputStats').innerHTML = `成功: <strong style="color:var(--success);">${convertedLines.length}</strong> 行`;
+                document.getElementById('skipStats').innerHTML = `忽略: <strong>${skippedCount}</strong> 行`;
+                outputPanel.style.display = 'flex';
+                document.getElementById('copyWarningBanner').classList.remove('show');
+            } else {
+                outputPanel.style.display = 'none';
+            }
+        }
+
+        function clearAll() {
+            triggerHaptic('clear');
+            inputText.value = '';
+            outputPanel.style.display = 'none';
+            modeBadge.classList.remove('show');
+            document.getElementById('inputStats').innerHTML = `行数: <strong>0</strong>`;
+            inputText.focus();
+        }
+
+        function showToast(message, type = 'success') {
+            if (toastTimer) clearTimeout(toastTimer);
+            toast.innerText = message;
+            toast.style.background = type === 'success' ? 'rgba(52, 199, 89, 0.95)' : 'rgba(255, 59, 48, 0.95)';
+            toast.className = 'toast show';
+            toastTimer = setTimeout(() => { toast.className = 'toast'; }, 2000);
+        }
+
+        function executeCopy() {
+            const text = outputText.value;
+            if (!text) return;
+
+            triggerHaptic('success');
+            
+            const btn = document.getElementById('copyBtn');
+            const icon = document.getElementById('copyIcon');
+            btn.classList.add('copied');
+            icon.className = 'fa-solid fa-check';
+            
+            setTimeout(() => {
+                btn.classList.remove('copied');
+                icon.className = 'fa-regular fa-copy';
+            }, 1500);
+
+            try {
+                if (navigator.clipboard && window.isSecureContext) {
+                    navigator.clipboard.writeText(text).then(() => {
+                        showToast('已复制');
+                    }).catch(() => runFallbackCopy(text));
+                    return;
+                }
+            } catch(e) {}
+            
+            runFallbackCopy(text);
+        }
+
+        function runFallbackCopy(text) {
+            let success = false;
+            try {
+                outputText.focus();
+                outputText.select();
+                outputText.setSelectionRange(0, text.length);
+                success = document.execCommand('copy');
+            } catch(e) {}
+
+            if (success) {
+                showToast('已复制');
+                setTimeout(() => { window.getSelection().removeAllRanges(); outputText.blur(); }, 500);
+            } else {
+                document.getElementById('copyWarningBanner').classList.add('show');
+            }
+        }
+    </script>
+</body>
+</html>

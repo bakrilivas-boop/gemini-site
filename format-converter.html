@@ -1,0 +1,988 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>谷歌账号格式转换极速版</title>
+    <!-- Modern Font & Icons -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        :root {
+            --bg-color: #0b0f19;
+            --card-bg: rgba(22, 28, 45, 0.6);
+            --border-color: rgba(255, 255, 255, 0.08);
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --accent-glow: rgba(59, 130, 246, 0.15);
+            --primary-gradient: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+            --success-gradient: linear-gradient(135deg, #10b981 0%, #047857 100%);
+            --warning-gradient: linear-gradient(135deg, #f59e0b 0%, #b45309 100%);
+            --success: #10b981;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --shadow-glow: 0 0 20px rgba(59, 130, 246, 0.2);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: 'Outfit', 'Noto Sans SC', sans-serif;
+            background-color: var(--bg-color);
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(59, 130, 246, 0.18) 0px, transparent 50%),
+                radial-gradient(at 100% 100%, rgba(16, 185, 129, 0.12) 0px, transparent 50%);
+            color: var(--text-primary);
+            min-height: 100vh;
+            padding: 1.2rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            overflow-x: hidden;
+        }
+
+        /* Container */
+        .container {
+            width: 100%;
+            max-width: 650px;
+            display: flex;
+            flex-direction: column;
+            gap: 1.2rem;
+            margin: 0 auto;
+        }
+
+        /* Header */
+        header {
+            text-align: center;
+            padding: 1rem 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .logo-area {
+            width: 55px;
+            height: 55px;
+            border-radius: 16px;
+            background: rgba(59, 130, 246, 0.1);
+            border: 1px solid rgba(59, 130, 246, 0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: var(--shadow-glow);
+            margin-bottom: 0.5rem;
+            animation: pulse 3s infinite alternate;
+        }
+
+        @keyframes pulse {
+            0% { box-shadow: 0 0 15px rgba(59, 130, 246, 0.15); border-color: rgba(59, 130, 246, 0.2); }
+            100% { box-shadow: 0 0 25px rgba(59, 130, 246, 0.35); border-color: rgba(59, 130, 246, 0.5); }
+        }
+
+        .logo-area i {
+            font-size: 1.8rem;
+            background: linear-gradient(to right, #60a5fa, #3b82f6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        h1 {
+            font-size: 1.4rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            background: linear-gradient(to right, #ffffff, #94a3b8);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .subtitle {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        /* Glass Panel */
+        .glass-panel {
+            background: var(--card-bg);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            padding: 1.2rem;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            transition: border-color 0.3s;
+        }
+
+        .glass-panel:focus-within {
+            border-color: rgba(59, 130, 246, 0.25);
+        }
+
+        /* Section Title */
+        .section-title {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            border-left: 3px solid #3b82f6;
+            padding-left: 0.6rem;
+        }
+
+        .badge {
+            font-size: 0.75rem;
+            background: rgba(255, 255, 255, 0.08);
+            padding: 0.2rem 0.5rem;
+            border-radius: 6px;
+            color: var(--text-secondary);
+            border: 1px solid rgba(255, 255, 255, 0.04);
+        }
+
+        /* Textarea Wrapper */
+        .textarea-container {
+            position: relative;
+            width: 100%;
+        }
+
+        textarea {
+            width: 100%;
+            height: 140px;
+            background: rgba(10, 14, 23, 0.75);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 0.9rem;
+            color: var(--text-primary);
+            font-family: 'Outfit', monospace;
+            font-size: 0.85rem;
+            line-height: 1.6;
+            resize: none;
+            outline: none;
+            transition: all 0.3s ease;
+            -webkit-appearance: none;
+        }
+
+        textarea:focus {
+            border-color: #3b82f6;
+            box-shadow: 0 0 10px rgba(59, 130, 246, 0.15);
+            background: rgba(10, 14, 23, 0.9);
+        }
+
+        textarea::placeholder {
+            color: rgba(148, 163, 184, 0.4);
+        }
+
+        /* Buttons & Actions */
+        .actions-row {
+            display: flex;
+            gap: 0.8rem;
+            width: 100%;
+        }
+
+        .btn {
+            flex: 1;
+            padding: 0.9rem 1.2rem;
+            border: none;
+            border-radius: 12px;
+            font-family: inherit;
+            font-weight: 600;
+            font-size: 0.95rem;
+            color: white;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+        }
+
+        .btn-primary {
+            background: var(--primary-gradient);
+        }
+
+        .btn-primary:active {
+            transform: scale(0.98);
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+        }
+
+        .btn-success {
+            background: var(--success-gradient);
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.15);
+        }
+
+        .btn-success:active {
+            transform: scale(0.98);
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            color: var(--text-primary);
+        }
+
+        .btn-secondary:active {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .btn-warning {
+            background: var(--warning-gradient);
+            box-shadow: 0 4px 12px rgba(245, 158, 11, 0.15);
+        }
+
+        .btn-warning:active {
+            transform: scale(0.98);
+        }
+
+        /* Mode Switcher Group */
+        .mode-container {
+            display: flex;
+            background: rgba(10, 14, 23, 0.6);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 0.25rem;
+            width: 100%;
+        }
+
+        .mode-tab {
+            flex: 1;
+            padding: 0.6rem;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.4rem;
+        }
+
+        .mode-tab.active {
+            background: rgba(59, 130, 246, 0.15);
+            color: #60a5fa;
+            border: 1px solid rgba(59, 130, 246, 0.2);
+        }
+
+        /* Tips Panel */
+        .tips-panel {
+            background: rgba(59, 130, 246, 0.04);
+            border: 1px dashed rgba(59, 130, 246, 0.15);
+            border-radius: 12px;
+            padding: 0.8rem 1rem;
+            font-size: 0.78rem;
+            color: var(--text-secondary);
+            line-height: 1.5;
+        }
+
+        .tips-panel ul {
+            list-style-type: none;
+        }
+
+        .tips-panel li {
+            margin-bottom: 0.3rem;
+            display: flex;
+            align-items: flex-start;
+            gap: 0.4rem;
+        }
+
+        .tips-panel li:last-child {
+            margin-bottom: 0;
+        }
+
+        .tips-panel i {
+            color: #60a5fa;
+            margin-top: 0.15rem;
+        }
+
+        /* Interactive Assistant Block inside UI */
+        .clipboard-warning-banner {
+            display: none;
+            background: rgba(245, 158, 11, 0.1);
+            border: 1px solid rgba(245, 158, 11, 0.2);
+            border-radius: 12px;
+            padding: 0.8rem;
+            margin-top: 0.5rem;
+            animation: fadeIn 0.3s ease forwards;
+        }
+
+        .clipboard-warning-banner.show {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.6rem;
+        }
+
+        .clipboard-warning-banner i {
+            color: var(--warning);
+            font-size: 1.1rem;
+            margin-top: 0.1rem;
+        }
+
+        .banner-text {
+            font-size: 0.8rem;
+            color: #fbd38d;
+            line-height: 1.4;
+        }
+
+        .banner-text strong {
+            color: #fff;
+            text-decoration: underline;
+        }
+
+        /* Modals */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(5, 7, 12, 0.85);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            padding: 1rem;
+        }
+
+        .modal.show {
+            display: flex;
+            opacity: 1;
+        }
+
+        .modal-content {
+            width: 100%;
+            max-width: 440px;
+            background: #121826;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 24px;
+            padding: 1.5rem;
+            transform: translateY(20px);
+            transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .modal.show .modal-content {
+            transform: translateY(0);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-header h2 {
+            font-size: 1.1rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: #fff;
+        }
+
+        .modal-header h2 i {
+            color: var(--warning);
+        }
+
+        .close-btn {
+            background: rgba(255, 255, 255, 0.05);
+            border: none;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            color: var(--text-secondary);
+            font-size: 1.1rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+
+        .close-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+        }
+
+        .modal-desc {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            line-height: 1.5;
+        }
+
+        .assistant-box {
+            background: rgba(0, 0, 0, 0.35);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            padding: 0.8rem;
+            max-height: 150px;
+            overflow-y: auto;
+            word-break: break-all;
+            white-space: pre-wrap;
+            font-family: monospace;
+            font-size: 0.8rem;
+            line-height: 1.5;
+            color: #60a5fa; 
+            -webkit-user-select: text;
+            user-select: text;
+        }
+
+        /* Toast */
+        .toast {
+            position: fixed;
+            bottom: 2rem;
+            left: 50%;
+            transform: translate(-50%, 100px);
+            background: rgba(16, 185, 129, 0.95);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            color: white;
+            padding: 0.8rem 1.5rem;
+            border-radius: 30px;
+            font-weight: 600;
+            font-size: 0.85rem;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+            opacity: 0;
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            z-index: 2000;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            white-space: nowrap;
+        }
+
+        .toast.show {
+            transform: translate(-50%, 0);
+            opacity: 1;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(5px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        
+        <header>
+            <div class="logo-area">
+                <i class="fa-solid fa-shuffle"></i>
+            </div>
+            <h1>谷歌账号格式转换器</h1>
+            <p class="subtitle">100% 本地运行 • 无需联网 • 隐私绝对安全</p>
+        </header>
+
+        <!-- Mode Switcher -->
+        <div class="mode-container">
+            <div id="modeForward" class="mode-tab active" onclick="switchMode('forward')">
+                <i class="fa-solid fa-arrow-right-arrow-left"></i> | 转换为 --- (智能过滤)
+            </div>
+            <div id="modeReverse" class="mode-tab" onclick="switchMode('reverse')">
+                <i class="fa-solid fa-rotate-left"></i> --- 反转为 |
+            </div>
+        </div>
+
+        <!-- Input Section -->
+        <div class="glass-panel">
+            <div class="section-title">
+                <span id="inputTitle">待转换内容</span>
+                <span class="badge" id="inputLineCount">行数: 0</span>
+            </div>
+            
+            <div class="textarea-container">
+                <textarea id="inputText" placeholder="请在此处粘贴待转换的原始文本...&#10;支持格式：邮箱号|密码|辅助邮箱|2fa码|时间|国家|...&#10;（将自动智能提取前4项，清洗掉后面的多余数据）" oninput="updateLineCounts()"></textarea>
+            </div>
+
+            <div class="actions-row">
+                <button class="btn btn-secondary" onclick="clearInput()">
+                    <i class="fa-solid fa-eraser"></i> 清空
+                </button>
+                <button class="btn btn-primary" onclick="processConversion()">
+                    <i class="fa-solid fa-wand-magic-sparkles"></i> 立即智能转换
+                </button>
+            </div>
+        </div>
+
+        <!-- Output Section -->
+        <div class="glass-panel" id="outputPanel" style="display: none; animation: fadeIn 0.4s ease forwards;">
+            <div class="section-title">
+                <span>转换结果</span>
+                <span class="badge" id="outputLineCount">行数: 0</span>
+            </div>
+
+            <div class="textarea-container">
+                <!-- Editable output to easily select on mobile -->
+                <textarea id="outputText" placeholder="转换后的结果将显示在这里..." onfocus="this.select()"></textarea>
+            </div>
+
+            <!-- Custom Help Warning Banner inside UI -->
+            <div id="copyWarningBanner" class="clipboard-warning-banner">
+                <i class="fa-solid fa-circle-info"></i>
+                <div class="banner-text">
+                    部分手机本地打开限制了剪贴板。<strong>上框内文字已全选</strong>，您可以长按文字，点系统菜单中的<strong>「拷贝」</strong>进行复制！
+                </div>
+            </div>
+
+            <div class="actions-row" style="flex-direction: column; gap: 0.6rem;">
+                <div style="display: flex; gap: 0.6rem; width: 100%;">
+                    <button class="btn btn-success" style="flex: 2;" id="mainCopyBtn" onclick="executeUltimateCopy()">
+                        <i class="fa-solid fa-clipboard-check"></i> 一键复制
+                    </button>
+                    <!-- Visual backup assistant trigger that does not try auto-copy -->
+                    <button class="btn btn-warning" style="flex: 1; font-size: 0.85rem;" onclick="openCopyAssistant(outputText.value)">
+                        <i class="fa-solid fa-hand-holding-hand"></i> 备用手动复制
+                    </button>
+                </div>
+                
+                <div style="display: flex; gap: 0.6rem; width: 100%;">
+                    <button class="btn btn-secondary" style="flex: 1; font-size: 0.85rem;" onclick="triggerSafeShare()">
+                        <i class="fa-solid fa-share-nodes"></i> 系统分享
+                    </button>
+                    <button class="btn btn-secondary" style="flex: 1; font-size: 0.85rem;" onclick="downloadAsFile()">
+                        <i class="fa-solid fa-file-arrow-down"></i> 下载为.txt文件
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Instructions Panel -->
+        <div class="tips-panel">
+            <ul>
+                <li><i class="fa-solid fa-circle-question"></i><span><strong>智能过滤说明</strong>：正向转换会精确定位每行前 4 个字段（邮箱、密码、辅助邮箱、2FA），剔除之后的多余信息，自动去除空行，格式完美干净。</span></li>
+                <li><i class="fa-solid fa-shield-halved"></i><span><strong>极客安全保障</strong>：完全在您的手机本地浏览器中计算，没有任何网络交互，密码与验证秘钥决不泄露，百分百安全。</span></li>
+            </ul>
+        </div>
+
+    </div>
+
+    <!-- Manual Copy Assistant Modal -->
+    <div id="copyAssistantModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2><i class="fa-solid fa-shield-halved"></i> 复制安全辅助通道</h2>
+                <button class="close-btn" onclick="closeCopyAssistant()">&times;</button>
+            </div>
+            <p class="modal-desc">
+                由于您的手机浏览器本地安全策略限制了自动写入剪贴板。
+                <br><br>
+                <strong>系统已自动帮您全选了下方文本</strong>。请直接点击手机弹出的<strong>「拷贝」</strong>或<strong>「复制」</strong>即可！
+            </p>
+            
+            <div id="copyAssistantText" class="assistant-box" onclick="selectAssistantText()"></div>
+            
+            <div style="display: flex; flex-direction: column; gap: 8px; width: 100%;">
+                <button class="btn btn-primary" onclick="selectAssistantText()">
+                    <i class="fa-solid fa-align-justify"></i> 重新全选高亮文字
+                </button>
+                <button class="btn btn-secondary" onclick="closeCopyAssistant()">
+                    关闭助手
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="toast"></div>
+
+    <script>
+        // --- 移动端屏幕调试日志拦截器 ---
+        window.addEventListener('error', function(e) {
+            showOnScreenError("运行时错误: " + e.message + " (" + e.filename + ":" + e.lineno + ")");
+        });
+        window.addEventListener('unhandledrejection', function(e) {
+            showOnScreenError("异步错误: " + e.reason);
+        });
+
+        function showOnScreenError(msg) {
+            let errDiv = document.getElementById('screen-error-logger');
+            if (!errDiv) {
+                errDiv = document.createElement('div');
+                errDiv.id = 'screen-error-logger';
+                errDiv.style.cssText = 'position:fixed;top:0;left:0;width:100%;background:rgba(239,68,68,0.95);color:white;padding:12px;font-size:12px;z-index:99999;word-break:break-all;font-family:monospace;box-shadow:0 4px 10px rgba(0,0,0,0.3);';
+                errDiv.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;"><strong>⚠️ 脚本运行调试日志（如无报错请忽略）：</strong><button onclick="this.parentElement.parentElement.remove()" style="background:none;border:none;color:white;font-size:14px;cursor:pointer;">&times;</button></div><div style="margin-top:6px;">' + msg + '</div>';
+                document.body.appendChild(errDiv);
+            } else {
+                errDiv.innerHTML += '<div style="margin-top:4px;border-top:1px solid rgba(255,255,255,0.2);padding-top:4px;">' + msg + '</div>';
+            }
+        }
+
+        let currentMode = 'forward'; // 'forward' = | to ---, 'reverse' = --- to |
+        const inputText = document.getElementById('inputText');
+        const outputText = document.getElementById('outputText');
+        const outputPanel = document.getElementById('outputPanel');
+        const copyWarningBanner = document.getElementById('copyWarningBanner');
+        const toast = document.getElementById('toast');
+
+        // Mode switching
+        function switchMode(mode) {
+            currentMode = mode;
+            document.getElementById('modeForward').classList.toggle('active', mode === 'forward');
+            document.getElementById('modeReverse').classList.toggle('active', mode === 'reverse');
+            
+            if (mode === 'forward') {
+                inputText.placeholder = "请在此处粘贴待转换的原始文本...\n支持格式：邮箱号|密码|辅助邮箱|2fa码|时间|国家|...\n（将自动智能提取前4项，清洗掉后面的多余数据）";
+                document.getElementById('inputTitle').innerText = "待转换内容 (| 变 ---)";
+            } else {
+                inputText.placeholder = "请在此处粘贴待反转的文本...\n支持格式：邮箱号---密码---辅助邮箱---2fa码";
+                document.getElementById('inputTitle').innerText = "待反转内容 (--- 变 |)";
+            }
+            
+            // clear output on mode switch
+            outputPanel.style.display = 'none';
+            outputText.value = '';
+            copyWarningBanner.classList.remove('show');
+            updateLineCounts();
+        }
+
+        function updateLineCounts() {
+            const inLines = inputText.value.split('\n').filter(l => l.trim() !== '').length;
+            document.getElementById('inputLineCount').innerText = `行数: ${inLines}`;
+            
+            const outLines = outputText.value.split('\n').filter(l => l.trim() !== '').length;
+            document.getElementById('outputLineCount').innerText = `行数: ${outLines}`;
+        }
+
+        function clearInput() {
+            inputText.value = '';
+            outputPanel.style.display = 'none';
+            outputText.value = '';
+            copyWarningBanner.classList.remove('show');
+            updateLineCounts();
+            showToast('已清空', 'info');
+        }
+
+        // Core Conversion Logic
+        function processConversion() {
+            try {
+                const text = inputText.value.trim();
+                if (!text) {
+                    showToast('请输入或粘贴文本内容！', 'error');
+                    return;
+                }
+
+                const lines = text.split(/\r?\n/);
+                const convertedLines = [];
+
+                if (currentMode === 'forward') {
+                    lines.forEach(line => {
+                        const trimmed = line.trim();
+                        if (!trimmed) return;
+
+                        let parts = [];
+                        if (trimmed.includes('|')) {
+                            parts = trimmed.split('|');
+                        } else if (trimmed.includes('---')) {
+                            parts = trimmed.split('---');
+                        } else {
+                            parts = trimmed.split(/\s+/);
+                        }
+
+                        parts = parts.map(p => p.trim());
+                        
+                        const email = parts[0] || '';
+                        const pwd = parts[1] || '';
+                        const rec = parts[2] || '';
+                        const code = parts[3] || '';
+
+                        if (email) {
+                            convertedLines.push(`${email}---${pwd}---${rec}---${code}`);
+                        }
+                    });
+                } else {
+                    lines.forEach(line => {
+                        const trimmed = line.trim();
+                        if (!trimmed) return;
+
+                        const parts = trimmed.split('---').map(p => p.trim());
+                        if (parts.length > 0) {
+                            convertedLines.push(parts.join('|') + '|');
+                        }
+                    });
+                }
+
+                if (convertedLines.length === 0) {
+                    showToast('未能识别到有效的账号行，请检查格式！', 'error');
+                    return;
+                }
+
+                outputText.value = convertedLines.join('\n');
+                outputPanel.style.display = 'flex';
+                
+                // Auto focus and select
+                setTimeout(() => {
+                    try {
+                        outputText.focus();
+                        outputText.select();
+                        outputText.setSelectionRange(0, outputText.value.length);
+                    } catch (selectErr) {
+                        console.warn("Auto select output failed: ", selectErr);
+                    }
+                }, 100);
+
+                updateLineCounts();
+                showToast(`智能转换成功！(共处理 ${convertedLines.length} 行)`);
+            } catch (err) {
+                showOnScreenError("转换逻辑出错: " + err.message);
+            }
+        }
+
+        // Show Toast Utility
+        function showToast(message, type = 'success') {
+            try {
+                toast.innerText = message;
+                toast.className = 'toast show';
+                if (type === 'error') {
+                    toast.style.background = 'rgba(239, 68, 68, 0.95)';
+                } else if (type === 'info') {
+                    toast.style.background = 'rgba(59, 130, 246, 0.95)';
+                } else {
+                    toast.style.background = 'rgba(16, 185, 129, 0.95)';
+                }
+
+                setTimeout(() => {
+                    toast.className = 'toast';
+                }, 2500);
+            } catch (err) {
+                console.error("Toast failed: ", err);
+            }
+        }
+
+        // Download as txt file fallback
+        function downloadAsFile() {
+            const content = outputText.value;
+            if (!content) return showToast('没有可下载的内容！', 'error');
+
+            try {
+                const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `格式转换结果_${new Date().toISOString().slice(0,10)}.txt`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                showToast('已开始下载 txt 文件！');
+            } catch (err) {
+                showToast('下载失败，请长按文本复制！', 'error');
+            }
+        }
+
+        // Safe Share Handler
+        function triggerSafeShare() {
+            const content = outputText.value;
+            if (!content) return showToast('没有可分享的内容！', 'error');
+
+            try {
+                if (navigator.share) {
+                    navigator.share({
+                        title: '格式转换结果',
+                        text: content
+                    }).then(() => {
+                        showToast('分享成功！');
+                    }).catch(err => {
+                        console.log('Share canceled or failed: ', err);
+                        showToast('由于浏览器本地安全限制，建议直接点击【一键复制】按钮。', 'info');
+                    });
+                } else {
+                    showToast('当前手机或浏览器不支持分享接口，已自动定位到复制功能。', 'info');
+                    executeUltimateCopy();
+                }
+            } catch (err) {
+                showToast('当前手机或浏览器不支持分享接口，已自动定位到复制功能。', 'info');
+                executeUltimateCopy();
+            }
+        }
+
+        // --- ULTIMATE MOBILE CLIPBOARD COPY SYSTEM ---
+
+        function executeUltimateCopy() {
+            try {
+                const text = outputText.value;
+                if (!text || !text.trim()) {
+                    showToast('没有可复制的结果！', 'error');
+                    return;
+                }
+
+                // Visual select to maximize success on mobile
+                try {
+                    outputText.focus();
+                    outputText.select();
+                    outputText.setSelectionRange(0, text.length);
+                } catch (e) {
+                    console.warn("Visual highlight failed: ", e);
+                }
+
+                // 1. Try modern async Clipboard API inside synchronous try-catch to prevent crashes on insecure origins
+                try {
+                    if (navigator && navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+                        // Skip if iOS file:// protocol to avoid silently returning promise but blocking write
+                        if (window.isSecureContext || !navigator.userAgent.match(/ipad|iphone/i)) {
+                            navigator.clipboard.writeText(text)
+                            .then(() => {
+                                showToast('✅ 复制成功！');
+                            })
+                            .catch(err => {
+                                console.warn("Clipboard promise rejected, running fallback...", err);
+                                runExecCommandCopy(text);
+                            });
+                            return;
+                        }
+                    }
+                } catch (err) {
+                    console.warn("Modern clipboard API failed to initialize: ", err);
+                }
+
+                // 2. Fallback to execCommand copy
+                runExecCommandCopy(text);
+
+            } catch (globalErr) {
+                console.error("Global copy routine error: ", globalErr);
+                // Last ditch alert so the user always has a reaction
+                showOnScreenError("复制系统异常: " + globalErr.message);
+                alert("一键复制被手机安全限制，已为您全选结果框，请长按文本框全选复制！");
+            }
+        }
+
+        function runExecCommandCopy(text) {
+            let success = false;
+
+            // Try dynamic invisible textarea copy
+            try {
+                const tempTextArea = document.createElement("textarea");
+                tempTextArea.value = text;
+                
+                tempTextArea.style.fontSize = '12pt';
+                tempTextArea.style.border = '0';
+                tempTextArea.style.padding = '0';
+                tempTextArea.style.margin = '0';
+                tempTextArea.style.position = 'fixed';
+                tempTextArea.style.left = '-9999px';
+                tempTextArea.style.top = '0';
+                tempTextArea.style.opacity = '0.01';
+                tempTextArea.style.width = '100px';
+                tempTextArea.style.height = '100px';
+                
+                tempTextArea.removeAttribute('readonly');
+                tempTextArea.contentEditable = 'true';
+                
+                document.body.appendChild(tempTextArea);
+                tempTextArea.focus();
+                
+                if (navigator.userAgent.match(/ipad|iphone/i)) {
+                    tempTextArea.setSelectionRange(0, text.length);
+                } else {
+                    tempTextArea.select();
+                }
+                
+                success = document.execCommand('copy');
+                document.body.removeChild(tempTextArea);
+            } catch (err) {
+                console.warn("Hidden textarea execCommand copy failed: ", err);
+            }
+
+            // Direct target selection fallback
+            if (!success) {
+                try {
+                    const originalReadOnly = outputText.readOnly;
+                    outputText.readOnly = false;
+                    outputText.contentEditable = 'true';
+                    
+                    outputText.focus();
+                    outputText.select();
+                    outputText.setSelectionRange(0, text.length);
+                    
+                    success = document.execCommand('copy');
+                    
+                    outputText.readOnly = originalReadOnly;
+                    outputText.contentEditable = 'false';
+                } catch (e) {
+                    console.warn("Direct textarea execCommand copy failed: ", e);
+                }
+            }
+
+            if (success) {
+                showToast('✅ 复制成功！');
+                setTimeout(() => {
+                    try {
+                        if (window.getSelection) {
+                            window.getSelection().removeAllRanges();
+                        }
+                        outputText.blur();
+                    } catch (e) {}
+                }, 1000);
+            } else {
+                // 3. Trigger Manual Copy Assistant Modal
+                openCopyAssistant(text);
+            }
+        }
+
+        // Manual Copy Assistant Modal triggers
+        function openCopyAssistant(text) {
+            try {
+                const modal = document.getElementById('copyAssistantModal');
+                const assistantText = document.getElementById('copyAssistantText');
+                
+                if (modal && assistantText) {
+                    assistantText.innerText = text;
+                    modal.classList.add('show');
+                    
+                    if (copyWarningBanner) {
+                        copyWarningBanner.classList.add('show');
+                    }
+                    
+                    // Auto focus and select node contents without popping up keyboard
+                    setTimeout(() => {
+                        selectAssistantText();
+                    }, 250);
+                } else {
+                    showOnScreenError("无法定位到复制助手弹窗 DOM 节点");
+                }
+            } catch (err) {
+                showOnScreenError("唤起复制助手弹窗出错: " + err.message);
+            }
+        }
+
+        function closeCopyAssistant() {
+            document.getElementById('copyAssistantModal').classList.remove('show');
+        }
+
+        function selectAssistantText() {
+            try {
+                const assistantText = document.getElementById('copyAssistantText');
+                if (assistantText) {
+                    const range = document.createRange();
+                    range.selectNodeContents(assistantText);
+                    const sel = window.getSelection();
+                    sel.removeAllRanges();
+                    sel.addRange(range);
+                }
+            } catch (e) {
+                console.error("Selection API highlight failed: ", e);
+                showOnScreenError("全选文字失败: " + e.message);
+            }
+        }
+    </script>
+</body>
+</html>

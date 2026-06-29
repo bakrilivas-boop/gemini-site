@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>谷歌账号管理器</title>
+    <!-- PWA Setup -->
+    <meta name="theme-color" content="#0f172a">
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="icon.svg">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <!-- Modern Font -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Icon Font -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- Lock Screen Overlay -->
+    <div id="lockScreen" class="lock-screen show">
+        <div class="lock-box glass-panel">
+            <i class="fa-solid fa-lock" style="font-size: 3rem; color: var(--accent-color); margin-bottom: 1rem;"></i>
+            <h2 id="lockTitle">输入主密码解锁</h2>
+            <p id="lockDesc" style="color: var(--text-secondary); margin-bottom: 1.5rem; font-size: 0.9rem;">
+                您的账号数据已被加密保护。
+            </p>
+            <form id="unlockForm" style="display: flex; gap: 0.5rem; width: 100%;">
+                <input type="password" id="masterPasswordInput" placeholder="请输入密码" required style="flex: 1;">
+                <button type="submit" class="btn btn-primary">解锁</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="app-container">
+        <header>
+            <div class="header-title">
+                <i class="fa-brands fa-google header-icon"></i>
+                <h1>账号管理系统</h1>
+            </div>
+            
+            <div class="header-search">
+                <i class="fa-solid fa-magnifying-glass"></i>
+                <input type="text" id="searchInput" placeholder="搜索账号/辅助邮箱/备注...">
+            </div>
+
+            <div style="display: flex; gap: 10px; align-items: center;">
+                <button id="securityBtn" class="btn btn-icon" title="安全设置" style="font-size: 1.2rem; margin-right: 10px;">
+                    <i class="fa-solid fa-shield-halved"></i>
+                </button>
+                <button id="exportBtn" class="btn btn-secondary">
+                    <i class="fa-solid fa-file-export"></i> 导出备份
+                </button>
+                <button id="importBtn" class="btn btn-secondary">
+                    <i class="fa-solid fa-file-import"></i> 批量导入
+                </button>
+                <button id="clearAllBtn" class="btn btn-danger" style="background-color: rgba(239, 68, 68, 0.2); color: var(--danger); border: 1px solid rgba(239, 68, 68, 0.3);">
+                    <i class="fa-solid fa-trash-can"></i> 一键清空
+                </button>
+            </div>
+        </header>
+
+        <nav style="display: flex; gap: 10px; margin-bottom: 1rem; justify-content: center;">
+            <a href="format-converter-v2.html" style="color: var(--accent-color); text-decoration: none; font-size: 0.85rem; display: flex; align-items: center; gap: 6px; padding: 0.5rem 1rem; background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.2); border-radius: 20px; transition: all 0.2s;">
+                <i class="fa-solid fa-shuffle"></i> 打开格式转换工具
+            </a>
+        </nav>
+
+        <main>
+            <div class="add-account-card glass-panel">
+                <h2>添加新账号</h2>
+                <form id="addAccountForm">
+                    <div class="input-group">
+                        <i class="fa-solid fa-envelope"></i>
+                        <input type="email" id="email" placeholder="邮箱账号" required>
+                    </div>
+                    <div class="input-group">
+                        <i class="fa-solid fa-lock"></i>
+                        <input type="text" id="password" placeholder="密码" required>
+                    </div>
+                    <div class="input-group">
+                        <i class="fa-solid fa-envelope-open-text"></i>
+                        <input type="email" id="recovery" placeholder="辅助邮箱 (可选)">
+                    </div>
+                    <div class="input-group">
+                        <i class="fa-solid fa-key"></i>
+                        <input type="text" id="secret" placeholder="2FA 秘钥 (可选)">
+                    </div>
+                    <div class="input-group">
+                        <i class="fa-solid fa-tag"></i>
+                        <input type="text" id="note" placeholder="备注标签 (如: 大号、工作号)">
+                    </div>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fa-solid fa-plus"></i> 确认添加
+                    </button>
+                </form>
+            </div>
+
+            <div class="accounts-section">
+                <h2>已存账号 (<span id="accountCount">0</span>)</h2>
+                <div id="accountsList" class="accounts-grid">
+                    <!-- Accounts will be rendered here -->
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Import Modal -->
+    <div id="importModal" class="modal">
+        <div class="modal-content glass-panel">
+            <div class="modal-header">
+                <h2>批量导入账号</h2>
+                <button class="close-btn" onclick="document.getElementById('importModal').classList.remove('show')">&times;</button>
+            </div>
+            <p class="modal-desc">每行一个账号，系统自动识别 <code>---</code> 和 <code>|</code> 分隔符。最少填写：<code>邮箱---密码</code>，完整格式：<code>邮箱---密码---辅助邮箱---2FA秘钥---备注</code></p>
+            <textarea id="importText" rows="10" placeholder="支持多种格式，每行一个：&#10;user@gmail.com---password123---rec@gmail.com---JBSWY3DPEHPK3PXP---大号&#10;user2@gmail.com|pwd456|rec2@gmail.com|ABCDEFGH&#10;user3@gmail.com---mypassword（仅邮箱+密码也行）"></textarea>
+            <div class="modal-actions" style="display: flex; gap: 10px;">
+                <button id="convertFormatBtn" class="btn btn-secondary" title="将带有 | 分隔符的文本一键替换为 ---">转换格式 (| 变 ---)</button>
+                <button id="confirmImportBtn" class="btn btn-primary" style="flex: 1;">开始导入</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Modal -->
+    <div id="editModal" class="modal">
+        <div class="modal-content glass-panel">
+            <div class="modal-header">
+                <h2>修改账号信息</h2>
+                <button class="close-btn" onclick="document.getElementById('editModal').classList.remove('show')">&times;</button>
+            </div>
+            <form id="editAccountForm" style="display: flex; flex-direction: column; gap: 1rem;">
+                <input type="hidden" id="edit-id">
+                <div class="input-group">
+                    <i class="fa-solid fa-envelope"></i>
+                    <input type="email" id="edit-email" placeholder="邮箱" required>
+                </div>
+                <div class="input-group">
+                    <i class="fa-solid fa-lock"></i>
+                    <input type="text" id="edit-password" placeholder="密码" required>
+                </div>
+                <div class="input-group">
+                    <i class="fa-solid fa-envelope-open-text"></i>
+                    <input type="email" id="edit-recovery" placeholder="辅助邮箱">
+                </div>
+                <div class="input-group">
+                    <i class="fa-solid fa-tag"></i>
+                    <input type="text" id="edit-note" placeholder="备注">
+                </div>
+                <!-- Note: 2FA is changed via dedicated button now, but we keep it here just in case -->
+                <div class="input-group">
+                    <i class="fa-solid fa-key"></i>
+                    <input type="text" id="edit-secret" placeholder="2FA 秘钥 (可选)">
+                </div>
+                <button type="submit" class="btn btn-primary" style="margin-top: 1rem;">保存修改</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Change 2FA Modal -->
+    <div id="change2FAModal" class="modal">
+        <div class="modal-content glass-panel">
+            <div class="modal-header">
+                <h2>更换 2FA 验证器</h2>
+                <button class="close-btn" onclick="document.getElementById('change2FAModal').classList.remove('show')">&times;</button>
+            </div>
+            <p class="modal-desc">您可以直接粘贴新秘钥，或者上传谷歌验证器给出的 <strong>二维码截图</strong> 自动识别。</p>
+            
+            <form id="change2FAForm" style="display: flex; flex-direction: column; gap: 1rem;">
+                <input type="hidden" id="change-2fa-id">
+                
+                <div class="input-group">
+                    <i class="fa-solid fa-key"></i>
+                    <input type="text" id="new-2fa-secret" placeholder="在此粘贴新秘钥文本..." required>
+                </div>
+
+                <div style="text-align: center; margin: 10px 0; color: var(--text-secondary);">或者</div>
+
+                <div class="qr-upload-area" onclick="document.getElementById('qrInput').click()">
+                    <i class="fa-solid fa-qrcode" style="font-size: 2rem; margin-bottom: 0.5rem; color: var(--accent-color);"></i>
+                    <p>点击上传二维码截图自动识别</p>
+                    <input type="file" id="qrInput" accept="image/*" style="display: none;">
+                </div>
+                <p id="qrResultText" style="color: var(--success); font-size: 0.9rem; text-align: center; display: none;">✅ 已成功识别二维码秘钥</p>
+
+                <button type="submit" class="btn btn-primary" style="margin-top: 1rem;">更新 2FA</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Security Settings Modal -->
+    <div id="securityModal" class="modal">
+        <div class="modal-content glass-panel">
+            <div class="modal-header">
+                <h2>安全设置</h2>
+                <button class="close-btn" onclick="document.getElementById('securityModal').classList.remove('show')">&times;</button>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 1.5rem;">
+                <div id="setupPasswordSection">
+                    <h3>设置主密码 (高强度加密)</h3>
+                    <p class="modal-desc">开启后，您的所有账号将被断网加密。⚠️ 如果忘记密码将无法找回数据，请牢记！</p>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <input type="password" id="newMasterPwd" placeholder="输入新密码">
+                        <button id="setMasterPwdBtn" class="btn btn-primary">立即加密</button>
+                    </div>
+                </div>
+                
+                <div id="removePasswordSection" style="display: none;">
+                    <h3>取消主密码保护</h3>
+                    <p class="modal-desc">取消后，您的账号将以明文保存在浏览器中，不再需要密码解锁。</p>
+                    <button id="removeMasterPwdBtn" class="btn btn-danger">解密并移除密码</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="toast"></div>
+
+    <!-- Manual Copy Assistant Modal -->
+    <div id="copyAssistantModal" class="modal">
+        <div class="modal-content glass-panel" style="max-width: 440px;">
+            <div class="modal-header">
+                <h2><i class="fa-solid fa-shield-halved" style="color: var(--accent-color);"></i> 安全复制助手</h2>
+                <button class="close-btn" onclick="document.getElementById('copyAssistantModal').classList.remove('show')">&times;</button>
+            </div>
+            <p class="modal-desc" style="color: var(--warning); font-weight: bold;">
+                ⚠️ 您的手机浏览器本地安全策略限制了自动复制功能。
+            </p>
+            <p class="modal-desc">
+                已为您自动全选了下方文本，请直接在弹出的菜单中点击<strong>「拷贝」</strong>或<strong>「复制」</strong>即可！
+            </p>
+            
+            <div id="copyAssistantText" onclick="selectAssistantText()" style="width: 100%; height: 130px; overflow-y: auto; margin-bottom: 1rem; color: #60a5fa; font-family: monospace; background: rgba(0, 0, 0, 0.4); border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 12px; padding: 0.8rem; font-size: 0.85rem; word-break: break-all; white-space: pre-wrap; -webkit-user-select: text; user-select: text;"></div>
+            
+            <div style="display: flex; flex-direction: column; gap: 8px; width: 100%;">
+                <button class="btn btn-primary" onclick="selectAssistantText()">
+                    <i class="fa-solid fa-align-justify"></i> 重新全选高亮文字
+                </button>
+                <button class="btn btn-secondary" onclick="document.getElementById('copyAssistantModal').classList.remove('show')">
+                    关闭
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/otpauth/9.3.1/otpauth.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+    <script src="script.js"></script>
+    <!-- Register PWA Service Worker -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js').then(reg => {
+                    console.log('PWA Service Worker registered');
+                }).catch(err => console.error('PWA SW failed', err));
+            });
+        }
+    </script>
+</body>
+</html>
