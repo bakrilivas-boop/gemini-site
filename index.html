@@ -2,262 +2,738 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>谷歌账号管理器</title>
-    <!-- PWA Setup -->
-    <meta name="theme-color" content="#0f172a">
-    <link rel="manifest" href="manifest.json">
-    <link rel="apple-touch-icon" href="icon.svg">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <!-- Modern Font -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <!-- Icon Font -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="stylesheet" href="style.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>谷歌账号格式转换器</title>
+    <meta name="description" content="100%本地运行的谷歌账号格式批量转换工具，支持多种分隔符智能识别，隐私安全有保障">
+    
+    <style>
+        :root {
+            /* Apple Light Mode Palette */
+            --bg-color: #f5f5f7; /* Classic Apple light grey background */
+            --card-bg: #ffffff;
+            --border-color: rgba(0, 0, 0, 0.08);
+            --border-active: #0071e3; /* Apple Blue */
+            
+            --text-primary: #1d1d1f;
+            --text-secondary: #86868b;
+            --text-dim: #a1a1a6;
+            
+            --accent: #0071e3;
+            --accent-hover: #0077ED;
+            --success: #34c759; /* Apple Green */
+            --warning: #ff9f0a; /* Apple Orange */
+            --danger: #ff3b30;  /* Apple Red */
+            
+            --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.04);
+            --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.06);
+            --shadow-lg: 0 8px 30px rgba(0, 0, 0, 0.08);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+        body {
+            /* Apple standard font stack */
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            min-height: 100vh;
+            min-height: 100dvh;
+            padding: 1.5rem 1rem 4rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 640px;
+            display: flex;
+            flex-direction: column;
+            gap: 1.2rem;
+        }
+
+        /* ─── Header ─── */
+        header {
+            text-align: center;
+            padding: 1rem 0 0.5rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .logo-icon {
+            width: 56px; height: 56px;
+            border-radius: 16px;
+            background: #ffffff;
+            box-shadow: var(--shadow-sm);
+            display: flex; align-items: center; justify-content: center;
+            margin-bottom: 0.5rem;
+        }
+        .logo-icon .icon { font-size: 1.55rem; color: var(--accent); }
+
+        .icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            line-height: 1;
+            font-style: normal;
+            font-weight: 700;
+        }
+
+        h1 {
+            font-size: 1.4rem; font-weight: 700; letter-spacing: -0.015em;
+            color: var(--text-primary);
+        }
+        .subtitle { font-size: 0.85rem; color: var(--text-secondary); }
+
+        /* ─── Nav Link ─── */
+        .nav-link {
+            display: inline-flex; align-items: center; gap: 6px;
+            color: var(--accent); text-decoration: none;
+            font-size: 0.85rem; font-weight: 500;
+            padding: 0.5rem 1rem;
+            background: #ffffff;
+            border-radius: 20px;
+            box-shadow: var(--shadow-sm);
+            transition: all 0.2s;
+        }
+        .nav-link:active { background: #f5f5f7; transform: scale(0.97); }
+
+        /* ─── Apple Style Cards ─── */
+        .card {
+            background: var(--card-bg);
+            border-radius: 20px;
+            padding: 1.25rem;
+            display: flex; flex-direction: column; gap: 0.8rem;
+            box-shadow: var(--shadow-md);
+            transition: box-shadow 0.3s ease;
+        }
+        
+        /* ─── Section Title ─── */
+        .section-title {
+            display: flex; justify-content: space-between; align-items: center;
+            font-size: 0.95rem; font-weight: 600;
+            color: var(--text-primary);
+        }
+        .section-title .label {
+            display: flex; align-items: center; gap: 0.5rem;
+        }
+        
+        .mode-badge {
+            font-size: 0.75rem; font-weight: 600;
+            background: #f0f8ff; /* Light blue tint */
+            padding: 0.25rem 0.7rem; border-radius: 20px;
+            color: var(--accent);
+            display: flex; align-items: center; gap: 4px;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        .mode-badge.show { opacity: 1; }
+
+        /* ─── Textarea Wrappers ─── */
+        .input-wrapper, .output-wrapper {
+            position: relative;
+            width: 100%;
+        }
+
+        textarea {
+            width: 100%;
+            background: #fbfbfd; /* Extremely light grey, almost white */
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 1rem;
+            color: var(--text-primary);
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            font-size: 0.85rem;
+            line-height: 1.6;
+            resize: none;
+            outline: none;
+            transition: all 0.2s;
+            -webkit-appearance: none;
+        }
+        #inputText { height: 140px; }
+        #outputText { height: 180px; padding-right: 7.5rem; }
+        
+        textarea:focus {
+            border-color: var(--accent);
+            background: #ffffff;
+            box-shadow: 0 0 0 4px rgba(0, 113, 227, 0.15); /* Apple focus ring */
+        }
+        textarea::placeholder { color: #c1c1c6; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
+
+        /* ─── Floating Actions ─── */
+        .clear-btn {
+            position: absolute;
+            top: 10px; right: 10px;
+            background: #e5e5ea;
+            border: none; border-radius: 50%;
+            color: var(--text-secondary);
+            width: 28px; height: 28px;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            z-index: 5;
+            font-size: 0.8rem;
+        }
+        .clear-btn:active { transform: scale(0.9); background: #d1d1d6; }
+
+        .floating-copy-btn {
+            position: absolute;
+            bottom: 12px; right: 12px;
+            background: var(--accent);
+            border: none; border-radius: 999px;
+            color: white;
+            min-width: 92px; height: 40px;
+            padding: 0 14px;
+            display: flex; align-items: center; justify-content: center;
+            gap: 0.45rem;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(0, 113, 227, 0.3);
+            transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            z-index: 10;
+            font-size: 0.9rem;
+            font-weight: 700;
+        }
+        .floating-copy-btn:active { transform: scale(0.9); background: var(--accent-hover); }
+        .floating-copy-btn.copied {
+            background: var(--success);
+            box-shadow: 0 4px 12px rgba(52, 199, 89, 0.3);
+        }
+
+        /* ─── Stats Mini ─── */
+        .stats-mini {
+            display: flex; justify-content: space-between;
+            font-size: 0.8rem; color: var(--text-secondary);
+            padding: 0 0.5rem;
+        }
+        .stats-mini span strong { color: var(--text-primary); font-weight: 600; font-variant-numeric: tabular-nums; }
+
+        /* ─── Clipboard Warning ─── */
+        .clipboard-warning-banner {
+            display: none;
+            background: #fff8e6;
+            border-radius: 12px;
+            padding: 0.8rem 1rem;
+            align-items: flex-start; gap: 0.6rem;
+            margin-top: 0.5rem;
+        }
+        .clipboard-warning-banner.show { display: flex; }
+        .clipboard-warning-banner .icon { color: var(--warning); font-size: 1rem; margin-top: 0.1rem; }
+        .banner-text { font-size: 0.8rem; color: #8a6a1c; line-height: 1.5; }
+        .banner-text strong { color: #5c450e; }
+
+        /* ─── Toast ─── */
+        .toast {
+            position: fixed; top: 2rem; left: 50%;
+            transform: translate(-50%, -100px);
+            padding: 0.8rem 1.5rem;
+            border-radius: 30px;
+            font-weight: 600; font-size: 0.9rem;
+            box-shadow: var(--shadow-lg);
+            opacity: 0;
+            transition: all 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            z-index: 2000;
+            display: flex; align-items: center; gap: 0.6rem;
+            color: white;
+            backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+        }
+        .toast.show { transform: translate(-50%, 0); opacity: 1; }
+
+        @media (max-width: 420px) {
+            body { padding: 1rem 0.75rem 3rem; }
+            .card { padding: 1rem; border-radius: 16px; }
+            #outputText { padding-right: 1rem; padding-bottom: 4rem; }
+            .floating-copy-btn { width: calc(100% - 24px); }
+        }
+
+    </style>
 </head>
 <body>
-    <!-- Lock Screen Overlay -->
-    <div id="lockScreen" class="lock-screen show">
-        <div class="lock-box glass-panel">
-            <i class="fa-solid fa-lock" style="font-size: 3rem; color: var(--accent-color); margin-bottom: 1rem;"></i>
-            <h2 id="lockTitle">输入主密码解锁</h2>
-            <p id="lockDesc" style="color: var(--text-secondary); margin-bottom: 1.5rem; font-size: 0.9rem;">
-                您的账号数据已被加密保护。
-            </p>
-            <form id="unlockForm" style="display: flex; gap: 0.5rem; width: 100%;">
-                <input type="password" id="masterPasswordInput" placeholder="请输入密码" required style="flex: 1;">
-                <button type="submit" class="btn btn-primary">解锁</button>
-            </form>
-        </div>
-    </div>
 
-    <div class="app-container">
+    <div class="container">
         <header>
-            <div class="header-title">
-                <i class="fa-brands fa-google header-icon"></i>
-                <h1>账号管理系统</h1>
-            </div>
-            
-            <div class="header-search">
-                <i class="fa-solid fa-magnifying-glass"></i>
-                <input type="text" id="searchInput" placeholder="搜索账号/辅助邮箱/备注...">
-            </div>
-
-            <div style="display: flex; gap: 10px; align-items: center;">
-                <button id="securityBtn" class="btn btn-icon" title="安全设置" style="font-size: 1.2rem; margin-right: 10px;">
-                    <i class="fa-solid fa-shield-halved"></i>
-                </button>
-                <button id="exportBtn" class="btn btn-secondary">
-                    <i class="fa-solid fa-file-export"></i> 导出备份
-                </button>
-                <button id="importBtn" class="btn btn-secondary">
-                    <i class="fa-solid fa-file-import"></i> 批量导入
-                </button>
-                <button id="clearAllBtn" class="btn btn-danger" style="background-color: rgba(239, 68, 68, 0.2); color: var(--danger); border: 1px solid rgba(239, 68, 68, 0.3);">
-                    <i class="fa-solid fa-trash-can"></i> 一键清空
-                </button>
-            </div>
+            <div class="logo-icon"><span class="icon" aria-hidden="true">✦</span></div>
+            <h1>格式转换器</h1>
+            <p class="subtitle">极致纯净 · 全自动化</p>
         </header>
 
-        <nav style="display: flex; gap: 10px; margin-bottom: 1rem; justify-content: center;">
-            <a href="format-converter-v2.html" style="color: var(--accent-color); text-decoration: none; font-size: 0.85rem; display: flex; align-items: center; gap: 6px; padding: 0.5rem 1rem; background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.2); border-radius: 20px; transition: all 0.2s;">
-                <i class="fa-solid fa-shuffle"></i> 打开格式转换工具
+        <div style="display: flex; justify-content: center; margin-bottom: 0.5rem;">
+            <a href="index.html" class="nav-link">
+                <span class="icon" aria-hidden="true">⌂</span> 返回主页
             </a>
-        </nav>
-
-        <main>
-            <div class="add-account-card glass-panel">
-                <h2>添加新账号</h2>
-                <form id="addAccountForm">
-                    <div class="input-group">
-                        <i class="fa-solid fa-envelope"></i>
-                        <input type="email" id="email" placeholder="邮箱账号" required>
-                    </div>
-                    <div class="input-group">
-                        <i class="fa-solid fa-lock"></i>
-                        <input type="text" id="password" placeholder="密码" required>
-                    </div>
-                    <div class="input-group">
-                        <i class="fa-solid fa-envelope-open-text"></i>
-                        <input type="email" id="recovery" placeholder="辅助邮箱 (可选)">
-                    </div>
-                    <div class="input-group">
-                        <i class="fa-solid fa-key"></i>
-                        <input type="text" id="secret" placeholder="2FA 秘钥 (可选)">
-                    </div>
-                    <div class="input-group">
-                        <i class="fa-solid fa-tag"></i>
-                        <input type="text" id="note" placeholder="备注标签 (如: 大号、工作号)">
-                    </div>
-                    <button type="submit" class="btn btn-primary">
-                        <i class="fa-solid fa-plus"></i> 确认添加
-                    </button>
-                </form>
-            </div>
-
-            <div class="accounts-section">
-                <h2>已存账号 (<span id="accountCount">0</span>)</h2>
-                <div id="accountsList" class="accounts-grid">
-                    <!-- Accounts will be rendered here -->
-                </div>
-            </div>
-        </main>
-    </div>
-
-    <!-- Import Modal -->
-    <div id="importModal" class="modal">
-        <div class="modal-content glass-panel">
-            <div class="modal-header">
-                <h2>批量导入账号</h2>
-                <button class="close-btn" onclick="document.getElementById('importModal').classList.remove('show')">&times;</button>
-            </div>
-            <p class="modal-desc">每行一个账号，系统自动识别 <code>---</code> 和 <code>|</code> 分隔符。最少填写：<code>邮箱---密码</code>，完整格式：<code>邮箱---密码---辅助邮箱---2FA秘钥---备注</code></p>
-            <textarea id="importText" rows="10" placeholder="支持多种格式，每行一个：&#10;user@gmail.com---password123---rec@gmail.com---JBSWY3DPEHPK3PXP---大号&#10;user2@gmail.com|pwd456|rec2@gmail.com|ABCDEFGH&#10;user3@gmail.com---mypassword（仅邮箱+密码也行）"></textarea>
-            <div class="modal-actions" style="display: flex; gap: 10px;">
-                <button id="convertFormatBtn" class="btn btn-secondary" title="将带有 | 分隔符的文本一键替换为 ---">转换格式 (| 变 ---)</button>
-                <button id="confirmImportBtn" class="btn btn-primary" style="flex: 1;">开始导入</button>
-            </div>
         </div>
-    </div>
 
-    <!-- Edit Modal -->
-    <div id="editModal" class="modal">
-        <div class="modal-content glass-panel">
-            <div class="modal-header">
-                <h2>修改账号信息</h2>
-                <button class="close-btn" onclick="document.getElementById('editModal').classList.remove('show')">&times;</button>
+        <div class="card">
+            <div class="section-title">
+                <div class="label">
+                    <span class="icon" style="color: var(--text-secondary);" aria-hidden="true">▣</span> 粘贴源数据
+                </div>
+                <div id="modeBadge" class="mode-badge">
+                    <span class="icon" aria-hidden="true">↯</span> <span id="modeText">智能识别</span>
+                </div>
             </div>
-            <form id="editAccountForm" style="display: flex; flex-direction: column; gap: 1rem;">
-                <input type="hidden" id="edit-id">
-                <div class="input-group">
-                    <i class="fa-solid fa-envelope"></i>
-                    <input type="email" id="edit-email" placeholder="邮箱" required>
-                </div>
-                <div class="input-group">
-                    <i class="fa-solid fa-lock"></i>
-                    <input type="text" id="edit-password" placeholder="密码" required>
-                </div>
-                <div class="input-group">
-                    <i class="fa-solid fa-envelope-open-text"></i>
-                    <input type="email" id="edit-recovery" placeholder="辅助邮箱">
-                </div>
-                <div class="input-group">
-                    <i class="fa-solid fa-tag"></i>
-                    <input type="text" id="edit-note" placeholder="备注">
-                </div>
-                <!-- Note: 2FA is changed via dedicated button now, but we keep it here just in case -->
-                <div class="input-group">
-                    <i class="fa-solid fa-key"></i>
-                    <input type="text" id="edit-secret" placeholder="2FA 秘钥 (可选)">
-                </div>
-                <button type="submit" class="btn btn-primary" style="margin-top: 1rem;">保存修改</button>
-            </form>
-        </div>
-    </div>
-
-    <!-- Change 2FA Modal -->
-    <div id="change2FAModal" class="modal">
-        <div class="modal-content glass-panel">
-            <div class="modal-header">
-                <h2>更换 2FA 验证器</h2>
-                <button class="close-btn" onclick="document.getElementById('change2FAModal').classList.remove('show')">&times;</button>
-            </div>
-            <p class="modal-desc">您可以直接粘贴新秘钥，或者上传谷歌验证器给出的 <strong>二维码截图</strong> 自动识别。</p>
             
-            <form id="change2FAForm" style="display: flex; flex-direction: column; gap: 1rem;">
-                <input type="hidden" id="change-2fa-id">
-                
-                <div class="input-group">
-                    <i class="fa-solid fa-key"></i>
-                    <input type="text" id="new-2fa-secret" placeholder="在此粘贴新秘钥文本..." required>
-                </div>
-
-                <div style="text-align: center; margin: 10px 0; color: var(--text-secondary);">或者</div>
-
-                <div class="qr-upload-area" onclick="document.getElementById('qrInput').click()">
-                    <i class="fa-solid fa-qrcode" style="font-size: 2rem; margin-bottom: 0.5rem; color: var(--accent-color);"></i>
-                    <p>点击上传二维码截图自动识别</p>
-                    <input type="file" id="qrInput" accept="image/*" style="display: none;">
-                </div>
-                <p id="qrResultText" style="color: var(--success); font-size: 0.9rem; text-align: center; display: none;">✅ 已成功识别二维码秘钥</p>
-
-                <button type="submit" class="btn btn-primary" style="margin-top: 1rem;">更新 2FA</button>
-            </form>
-        </div>
-    </div>
-
-    <!-- Security Settings Modal -->
-    <div id="securityModal" class="modal">
-        <div class="modal-content glass-panel">
-            <div class="modal-header">
-                <h2>安全设置</h2>
-                <button class="close-btn" onclick="document.getElementById('securityModal').classList.remove('show')">&times;</button>
+            <div class="input-wrapper">
+                <textarea id="inputText" placeholder="请在此粘贴需要转换的内容...&#10;&#10;自动提取账号、密码、可选辅助邮箱和2FA。&#10;没有辅助邮箱时会自动跳过；检测到 --- 时会自动还原为 |。" oninput="handleInput()"></textarea>
+                <button class="clear-btn" type="button" onclick="clearAll()" title="清空" aria-label="清空">
+                    <span class="icon" aria-hidden="true">×</span>
+                </button>
             </div>
-            <div style="display: flex; flex-direction: column; gap: 1.5rem;">
-                <div id="setupPasswordSection">
-                    <h3>设置主密码 (高强度加密)</h3>
-                    <p class="modal-desc">开启后，您的所有账号将被断网加密。⚠️ 如果忘记密码将无法找回数据，请牢记！</p>
-                    <div style="display: flex; gap: 0.5rem;">
-                        <input type="password" id="newMasterPwd" placeholder="输入新密码">
-                        <button id="setMasterPwdBtn" class="btn btn-primary">立即加密</button>
-                    </div>
+            <div class="stats-mini">
+                <span id="inputStats">有效行: <strong>0</strong></span>
+            </div>
+        </div>
+
+        <div class="card" id="outputPanel" style="display: none;">
+            <div class="section-title">
+                <div class="label" style="color: var(--success);">
+                    <span class="icon" aria-hidden="true">✓</span> 转换结果
                 </div>
-                
-                <div id="removePasswordSection" style="display: none;">
-                    <h3>取消主密码保护</h3>
-                    <p class="modal-desc">取消后，您的账号将以明文保存在浏览器中，不再需要密码解锁。</p>
-                    <button id="removeMasterPwdBtn" class="btn btn-danger">解密并移除密码</button>
+            </div>
+
+            <div class="output-wrapper">
+                <textarea id="outputText" readonly></textarea>
+                <!-- 悬浮一键复制按钮 -->
+                <button class="floating-copy-btn" id="copyBtn" type="button" onclick="executeCopy()" aria-label="复制转换结果">
+                    <span class="icon" id="copyIcon" aria-hidden="true">⧉</span>
+                    <span id="copyText">复制</span>
+                </button>
+            </div>
+
+            <div class="stats-mini">
+                <span id="outputStats">成功: <strong>0</strong> 行</span>
+                <span id="skipStats">忽略: <strong>0</strong> 行</span>
+            </div>
+
+            <div id="copyWarningBanner" class="clipboard-warning-banner">
+                <span class="icon" aria-hidden="true">i</span>
+                <div class="banner-text">
+                    由于浏览器限制未能自动复制，已为您<strong>全选文字</strong>，请长按文本框点击<strong>「拷贝」</strong>。
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Toast Notification -->
     <div id="toast" class="toast"></div>
 
-    <!-- Manual Copy Assistant Modal -->
-    <div id="copyAssistantModal" class="modal">
-        <div class="modal-content glass-panel" style="max-width: 440px;">
-            <div class="modal-header">
-                <h2><i class="fa-solid fa-shield-halved" style="color: var(--accent-color);"></i> 安全复制助手</h2>
-                <button class="close-btn" onclick="document.getElementById('copyAssistantModal').classList.remove('show')">&times;</button>
-            </div>
-            <p class="modal-desc" style="color: var(--warning); font-weight: bold;">
-                ⚠️ 您的手机浏览器本地安全策略限制了自动复制功能。
-            </p>
-            <p class="modal-desc">
-                已为您自动全选了下方文本，请直接在弹出的菜单中点击<strong>「拷贝」</strong>或<strong>「复制」</strong>即可！
-            </p>
-            
-            <div id="copyAssistantText" onclick="selectAssistantText()" style="width: 100%; height: 130px; overflow-y: auto; margin-bottom: 1rem; color: #60a5fa; font-family: monospace; background: rgba(0, 0, 0, 0.4); border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 12px; padding: 0.8rem; font-size: 0.85rem; word-break: break-all; white-space: pre-wrap; -webkit-user-select: text; user-select: text;"></div>
-            
-            <div style="display: flex; flex-direction: column; gap: 8px; width: 100%;">
-                <button class="btn btn-primary" onclick="selectAssistantText()">
-                    <i class="fa-solid fa-align-justify"></i> 重新全选高亮文字
-                </button>
-                <button class="btn btn-secondary" onclick="document.getElementById('copyAssistantModal').classList.remove('show')">
-                    关闭
-                </button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Libraries -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/otpauth/9.3.1/otpauth.umd.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
-    <script src="script.js"></script>
-    <!-- Register PWA Service Worker -->
     <script>
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('./sw.js').then(reg => {
-                    console.log('PWA Service Worker registered');
-                }).catch(err => console.error('PWA SW failed', err));
+        const inputText = document.getElementById('inputText');
+        const outputText = document.getElementById('outputText');
+        const outputPanel = document.getElementById('outputPanel');
+        const modeBadge = document.getElementById('modeBadge');
+        const modeText = document.getElementById('modeText');
+        const toast = document.getElementById('toast');
+        let toastTimer = null;
+        const EMAIL_REGEX_SOURCE = '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}';
+        const HARD_DELIMITERS = ['|', '\t', ',', ';', '，', '；'];
+        const ACCOUNT_LABELS = ['登录账号', '账号', '账户', '邮箱', 'email', 'mail', 'login', 'username', 'user'];
+        const PASSWORD_LABELS = ['登录密码', '密码', 'password', 'passwd', 'pass', 'pwd'];
+        const RECOVERY_LABELS = ['辅助邮箱', '辅助邮件', '恢复邮箱', '恢复邮件', '备用邮箱', '密保邮箱', 'recovery email', 'recovery mail', 'recovery'];
+        const TWO_FACTOR_LABELS = ['google authenticator', 'authenticator', 'two factor', '2fa', 'totp', 'otp', '谷歌验证码', '谷歌验证', '谷歌密钥', '验证密钥', '动态密钥', '两步验证', '二步验证', '2步验证', '验证码', '密钥'];
+        const ALL_FIELD_LABELS = ACCOUNT_LABELS.concat(PASSWORD_LABELS, RECOVERY_LABELS, TWO_FACTOR_LABELS);
+        const ALL_FIELD_LABEL_PATTERN = ALL_FIELD_LABELS
+            .slice()
+            .sort((a, b) => b.length - a.length)
+            .map(escapeRegex)
+            .join('|');
+
+        // 触觉反馈辅助函数
+        function triggerHaptic(type = 'light') {
+            if (navigator.vibrate) {
+                if (type === 'light') navigator.vibrate([20]);
+                if (type === 'success') navigator.vibrate([30, 20, 30]);
+                if (type === 'clear') navigator.vibrate([15, 15]);
+            }
+        }
+
+        // 实时输入处理
+        function handleInput() {
+            const text = inputText.value;
+            const lines = text.split(/\r?\n|\r/);
+            const effectiveLines = lines.filter(line => line.trim()).length;
+            document.getElementById('inputStats').innerHTML = `有效行: <strong>${effectiveLines}</strong>`;
+            
+            if (!text.trim()) {
+                outputText.value = '';
+                outputPanel.style.display = 'none';
+                modeBadge.classList.remove('show');
+                document.getElementById('copyWarningBanner').classList.remove('show');
+                return;
+            }
+
+            triggerHaptic('light');
+
+            // 智能格式嗅探
+            const dashCount = (text.match(/---/g) || []).length;
+            const pipeCount = (text.match(/\|/g) || []).length;
+            
+            let currentMode = 'forward';
+            if (dashCount > 0 && dashCount > pipeCount) {
+                currentMode = 'reverse';
+            }
+
+            // 更新徽章
+            modeBadge.classList.add('show');
+            if (currentMode === 'forward') {
+                modeText.innerText = "智能提纯过滤";
+                modeBadge.style.color = "var(--accent)";
+                modeBadge.style.background = "#e6f2fd";
+            } else {
+                modeText.innerText = "原样还原";
+                modeBadge.style.color = "var(--warning)";
+                modeBadge.style.background = "#fff5e6";
+            }
+
+            // 转换逻辑
+            const convertedLines = [];
+            let skippedCount = 0;
+
+            if (currentMode === 'forward') {
+                lines.forEach(line => {
+                    const trimmed = line.trim();
+                    if (!trimmed) { skippedCount++; return; }
+
+                    const credential = extractCredential(trimmed);
+
+                    if (credential) {
+                        convertedLines.push(formatCredential(credential));
+                    } else {
+                        skippedCount++;
+                    }
+                });
+            } else { // reverse mode
+                lines.forEach(line => {
+                    const trimmed = line.trim();
+                    if (!trimmed) { skippedCount++; return; }
+                    const parts = trimmed.split('---').map(p => p.trim()).filter(Boolean);
+                    if (parts.length > 0 && parts[0]) convertedLines.push(parts.join('|'));
+                    else skippedCount++;
+                });
+            }
+
+            if (convertedLines.length > 0) {
+                outputText.value = convertedLines.join('\n');
+                document.getElementById('outputStats').innerHTML = `成功: <strong style="color:var(--success);">${convertedLines.length}</strong> 行`;
+                document.getElementById('skipStats').innerHTML = `忽略: <strong>${skippedCount}</strong> 行`;
+                outputPanel.style.display = 'flex';
+                document.getElementById('copyWarningBanner').classList.remove('show');
+            } else {
+                outputPanel.style.display = 'none';
+            }
+        }
+
+        function escapeRegex(value) {
+            return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        }
+
+        function extractCredential(line) {
+            const cleaned = line.trim().replace(/^\uFEFF/, '');
+            const hardFields = splitHardDelimitedLine(cleaned);
+            const fields = hardFields || splitForwardLine(cleaned);
+
+            const labeledAccount = extractLabeledValue(cleaned, ACCOUNT_LABELS);
+            const labeledPassword = extractLabeledValue(cleaned, PASSWORD_LABELS);
+            const labeledRecovery = extractLabeledValue(cleaned, RECOVERY_LABELS);
+            const labeledTwoFactor = extractLabeledValue(cleaned, TWO_FACTOR_LABELS);
+
+            const account = normalizeAccount(labeledAccount) || findAccount(cleaned, fields);
+            const passwordInfo = normalizePassword(labeledPassword)
+                ? { value: normalizePassword(labeledPassword), index: -1 }
+                : findPassword(cleaned, fields, account);
+            const password = passwordInfo.value;
+
+            const recovery = normalizeRecovery(labeledRecovery)
+                || findRecovery(fields, account, passwordInfo.index);
+            const twoFactor = normalizeTwoFactor(extractTwoFactorSecret(labeledTwoFactor))
+                || findTwoFactor(cleaned, hardFields, account, password, recovery, passwordInfo.index);
+
+            if (!account || !password || !twoFactor) return null;
+
+            return {
+                account,
+                password,
+                recovery,
+                twoFactor,
+            };
+        }
+
+        function formatCredential(credential) {
+            const parts = [credential.account, credential.password];
+            if (credential.recovery) parts.push(credential.recovery);
+            parts.push(credential.twoFactor);
+            return parts.join('---');
+        }
+
+        function splitHardDelimitedLine(line) {
+            const trimmed = line.trim().replace(/^\uFEFF/, '');
+            const selectedDelimiter = HARD_DELIMITERS.find(delimiter => trimmed.includes(delimiter));
+
+            if (!selectedDelimiter) return null;
+            return trimmed.split(selectedDelimiter).map(part => cleanFieldValue(part)).filter(Boolean);
+        }
+
+        function splitForwardLine(line) {
+            const trimmed = line.trim().replace(/^\uFEFF/, '');
+            const hardFields = splitHardDelimitedLine(trimmed);
+            if (hardFields) return hardFields;
+            return trimmed.split(/\s+/).map(part => cleanFieldValue(part)).filter(Boolean);
+        }
+
+        function extractLabeledValue(line, labels) {
+            const labelPattern = labels
+                .slice()
+                .sort((a, b) => b.length - a.length)
+                .map(escapeRegex)
+                .join('|');
+            const matcher = new RegExp(
+                `(?:^|[\\s|,;，；\\[{(])(?:${labelPattern})\\s*[:：=]\\s*([\\s\\S]*?)(?=\\s+(?:${ALL_FIELD_LABEL_PATTERN})\\s*[:：=]|[|,;，；\\n]|$)`,
+                'i'
+            );
+            const match = line.match(matcher);
+            return match ? cleanFieldValue(match[1]) : '';
+        }
+
+        function cleanFieldValue(value) {
+            if (!value) return '';
+            return value
+                .trim()
+                .replace(/^["'“”‘’`]+|["'“”‘’`]+$/g, '')
+                .replace(new RegExp(`^(?:${ALL_FIELD_LABEL_PATTERN})\\s*[:：=]\\s*`, 'i'), '')
+                .trim();
+        }
+
+        function trimToken(value) {
+            return cleanFieldValue(value)
+                .replace(/^[\s"'“”‘’`<[{(]+|[\s"'“”‘’`>\]}).,，;；]+$/g, '')
+                .trim();
+        }
+
+        function extractEmails(value) {
+            return value.match(new RegExp(EMAIL_REGEX_SOURCE, 'gi')) || [];
+        }
+
+        function normalizeAccount(value) {
+            const email = extractEmails(value)[0];
+            if (email) return email;
+
+            const token = trimToken(value).match(/[^\s|,;，；]+/)?.[0] || '';
+            return token && !looksLikeNoiseToken(token) ? token : '';
+        }
+
+        function normalizeRecovery(value) {
+            return extractEmails(value)[0] || '';
+        }
+
+        function normalizePassword(value) {
+            const token = trimToken(value).match(/[^\s|,;，；]+/)?.[0] || '';
+            if (!token || extractEmails(token).length || looksLikeNoiseToken(token)) return '';
+            return token;
+        }
+
+        function normalizeTwoFactor(value) {
+            return trimToken(value).replace(/\s+/g, ' ');
+        }
+
+        function findAccount(line, fields) {
+            const email = extractEmails(line)[0];
+            if (email) return email;
+
+            for (const field of fields) {
+                const account = normalizeAccount(field);
+                if (account) return account;
+            }
+
+            return '';
+        }
+
+        function findPassword(line, fields, account) {
+            const accountIndex = findFieldIndex(fields, account);
+            const startIndex = accountIndex >= 0 ? accountIndex + 1 : 0;
+
+            for (let i = startIndex; i < fields.length; i++) {
+                const password = normalizePassword(fields[i]);
+                if (password) return { value: password, index: i };
+            }
+
+            if (account) {
+                const afterAccount = textAfterValue(line, account);
+                const token = (afterAccount.match(/[^\s|,;，；]+/g) || [])
+                    .map(normalizePassword)
+                    .find(Boolean);
+                if (token) return { value: token, index: -1 };
+            }
+
+            return { value: '', index: -1 };
+        }
+
+        function findRecovery(fields, account, passwordIndex) {
+            const startIndex = passwordIndex >= 0 ? passwordIndex + 1 : 0;
+            const accountLower = (account || '').toLowerCase();
+
+            for (let i = startIndex; i < fields.length; i++) {
+                const email = extractEmails(fields[i]).find(item => item.toLowerCase() !== accountLower);
+                if (email) return email;
+                if (extractTwoFactorSecret(fields[i])) break;
+            }
+
+            return '';
+        }
+
+        function findTwoFactor(line, hardFields, account, password, recovery, passwordIndex) {
+            if (hardFields) {
+                const recoveryIndex = recovery ? findFieldIndex(hardFields, recovery) : -1;
+                const startIndex = recoveryIndex >= 0
+                    ? recoveryIndex + 1
+                    : (passwordIndex >= 0 ? passwordIndex + 1 : 0);
+                const value = hardFields.slice(startIndex).join(' ');
+                return normalizeTwoFactor(extractTwoFactorSecret(value));
+            }
+
+            const anchor = recovery || password || account;
+            const value = anchor ? textAfterValue(line, anchor) : line;
+            return normalizeTwoFactor(extractTwoFactorSecret(value));
+        }
+
+        function findFieldIndex(fields, value) {
+            if (!value) return -1;
+            const lowerValue = value.toLowerCase();
+            return fields.findIndex(field => field.toLowerCase().includes(lowerValue));
+        }
+
+        function textAfterValue(line, value) {
+            const index = line.toLowerCase().indexOf(String(value).toLowerCase());
+            if (index < 0) return '';
+            return line.slice(index + String(value).length).replace(/^[\s|,;，；:\-=]+/, '').trim();
+        }
+
+        function extractTwoFactorSecret(value) {
+            if (!value) return '';
+
+            let candidate = cleanFieldValue(value);
+            const labeled = extractLabeledValue(candidate, TWO_FACTOR_LABELS);
+            if (labeled) candidate = labeled;
+
+            const uriSecret = extractOtpAuthSecret(candidate);
+            if (uriSecret) return uriSecret;
+
+            candidate = cutCredentialNoiseTail(candidate);
+            const grouped = candidate.match(/\b(?:[A-Za-z0-9]{4}[\s-]+){2,}[A-Za-z0-9]{4}\b/);
+            if (grouped) return normalizeTwoFactor(grouped[0]);
+
+            const compact = candidate.match(/\b[A-Za-z0-9]{8,}\b/);
+            if (compact) return normalizeTwoFactor(compact[0]);
+
+            const shortToken = candidate.match(/\b[A-Za-z0-9]{4,7}\b/);
+            return shortToken ? normalizeTwoFactor(shortToken[0]) : '';
+        }
+
+        function extractOtpAuthSecret(value) {
+            const match = value.match(/[?&]secret=([^&#\s]+)/i);
+            if (!match) return '';
+            try {
+                return decodeURIComponent(match[1]).replace(/\+/g, ' ').trim();
+            } catch (e) {
+                return match[1].trim();
+            }
+        }
+
+        function cutCredentialNoiseTail(value) {
+            let result = cleanFieldValue(value).replace(/\s+/g, ' ').trim();
+            const noisePatterns = [
+                /\s+\d{4}[-/年]\d{1,2}[-/月]\d{1,2}/,
+                /\s+\d{1,2}:\d{2}(?::\d{2})?/,
+                /\s+(?:已经|已|账号凭证|凭证|获取成功|订阅|成功|失败)/,
+                /\s*[{\[]\s*["']?(?:client_id|client_secret|token)/i,
+                /\s+(?:client_id|client_secret)\b/i,
+            ];
+
+            noisePatterns.forEach(pattern => {
+                const match = result.match(pattern);
+                if (match && match.index > 0) {
+                    result = result.slice(0, match.index).trim();
+                }
             });
+
+            return result;
+        }
+
+        function looksLikeNoiseToken(value) {
+            return /^(?:\d{4}[-/]\d{1,2}[-/]\d{1,2}|\d{1,2}:\d{2}(?::\d{2})?|已经|已|账号凭证|凭证|获取成功|订阅|成功|失败)$/i.test(value);
+        }
+
+        function clearAll() {
+            triggerHaptic('clear');
+            inputText.value = '';
+            outputText.value = '';
+            outputPanel.style.display = 'none';
+            modeBadge.classList.remove('show');
+            modeText.innerText = '智能识别';
+            document.getElementById('inputStats').innerHTML = `有效行: <strong>0</strong>`;
+            document.getElementById('outputStats').innerHTML = `成功: <strong>0</strong> 行`;
+            document.getElementById('skipStats').innerHTML = `忽略: <strong>0</strong> 行`;
+            document.getElementById('copyWarningBanner').classList.remove('show');
+            inputText.focus();
+        }
+
+        function showToast(message, type = 'success') {
+            if (toastTimer) clearTimeout(toastTimer);
+            toast.innerText = message;
+            toast.style.background = type === 'success' ? 'rgba(52, 199, 89, 0.95)' : 'rgba(255, 59, 48, 0.95)';
+            toast.className = 'toast show';
+            toastTimer = setTimeout(() => { toast.className = 'toast'; }, 2000);
+        }
+
+        function executeCopy() {
+            const text = outputText.value;
+            if (!text) return;
+
+            triggerHaptic('success');
+            
+            const btn = document.getElementById('copyBtn');
+            const icon = document.getElementById('copyIcon');
+            const copyText = document.getElementById('copyText');
+            btn.classList.add('copied');
+            icon.innerText = '✓';
+            copyText.innerText = '已复制';
+            
+            setTimeout(() => {
+                btn.classList.remove('copied');
+                icon.innerText = '⧉';
+                copyText.innerText = '复制';
+            }, 1500);
+
+            try {
+                if (navigator.clipboard && window.isSecureContext) {
+                    navigator.clipboard.writeText(text).then(() => {
+                        showToast('已复制');
+                    }).catch(() => runFallbackCopy(text));
+                    return;
+                }
+            } catch(e) {}
+            
+            runFallbackCopy(text);
+        }
+
+        function runFallbackCopy(text) {
+            let success = false;
+            try {
+                outputText.focus();
+                outputText.select();
+                outputText.setSelectionRange(0, text.length);
+                success = document.execCommand('copy');
+            } catch(e) {}
+
+            if (success) {
+                showToast('已复制');
+                setTimeout(() => { window.getSelection().removeAllRanges(); outputText.blur(); }, 500);
+            } else {
+                document.getElementById('copyWarningBanner').classList.add('show');
+                showToast('请长按全选内容后拷贝', 'error');
+            }
         }
     </script>
 </body>
