@@ -2,14 +2,9 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>谷歌账号格式转换器</title>
     <meta name="description" content="100%本地运行的谷歌账号格式批量转换工具，支持多种分隔符智能识别，隐私安全有保障">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <!-- Use system UI fonts for true Apple feel, fallback to Inter -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
     <style>
         :root {
@@ -38,7 +33,7 @@
 
         body {
             /* Apple standard font stack */
-            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", "Inter", Roboto, Helvetica, Arial, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
             background-color: var(--bg-color);
             color: var(--text-primary);
             min-height: 100vh;
@@ -78,7 +73,16 @@
             display: flex; align-items: center; justify-content: center;
             margin-bottom: 0.5rem;
         }
-        .logo-icon i { font-size: 1.6rem; color: var(--accent); }
+        .logo-icon .icon { font-size: 1.55rem; color: var(--accent); }
+
+        .icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            line-height: 1;
+            font-style: normal;
+            font-weight: 700;
+        }
 
         h1 {
             font-size: 1.4rem; font-weight: 700; letter-spacing: -0.015em;
@@ -152,7 +156,7 @@
             -webkit-appearance: none;
         }
         #inputText { height: 140px; }
-        #outputText { height: 180px; padding-right: 3.5rem; }
+        #outputText { height: 180px; padding-right: 7.5rem; }
         
         textarea:focus {
             border-color: var(--accent);
@@ -181,15 +185,18 @@
             position: absolute;
             bottom: 12px; right: 12px;
             background: var(--accent);
-            border: none; border-radius: 50%; /* Perfect circle for Apple style */
+            border: none; border-radius: 999px;
             color: white;
-            width: 44px; height: 44px;
+            min-width: 92px; height: 40px;
+            padding: 0 14px;
             display: flex; align-items: center; justify-content: center;
+            gap: 0.45rem;
             cursor: pointer;
             box-shadow: 0 4px 12px rgba(0, 113, 227, 0.3);
             transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
             z-index: 10;
-            font-size: 1.1rem;
+            font-size: 0.9rem;
+            font-weight: 700;
         }
         .floating-copy-btn:active { transform: scale(0.9); background: var(--accent-hover); }
         .floating-copy-btn.copied {
@@ -215,7 +222,7 @@
             margin-top: 0.5rem;
         }
         .clipboard-warning-banner.show { display: flex; }
-        .clipboard-warning-banner i { color: var(--warning); font-size: 1rem; margin-top: 0.1rem; }
+        .clipboard-warning-banner .icon { color: var(--warning); font-size: 1rem; margin-top: 0.1rem; }
         .banner-text { font-size: 0.8rem; color: #8a6a1c; line-height: 1.5; }
         .banner-text strong { color: #5c450e; }
 
@@ -236,56 +243,64 @@
         }
         .toast.show { transform: translate(-50%, 0); opacity: 1; }
 
+        @media (max-width: 420px) {
+            body { padding: 1rem 0.75rem 3rem; }
+            .card { padding: 1rem; border-radius: 16px; }
+            #outputText { padding-right: 1rem; padding-bottom: 4rem; }
+            .floating-copy-btn { width: calc(100% - 24px); }
+        }
+
     </style>
 </head>
 <body>
 
     <div class="container">
         <header>
-            <div class="logo-icon"><i class="fa-solid fa-wand-magic-sparkles"></i></div>
+            <div class="logo-icon"><span class="icon" aria-hidden="true">✦</span></div>
             <h1>格式转换器</h1>
             <p class="subtitle">极致纯净 · 全自动化</p>
         </header>
 
         <div style="display: flex; justify-content: center; margin-bottom: 0.5rem;">
             <a href="index.html" class="nav-link">
-                <i class="fa-solid fa-house"></i> 返回主页
+                <span class="icon" aria-hidden="true">⌂</span> 返回主页
             </a>
         </div>
 
         <div class="card">
             <div class="section-title">
                 <div class="label">
-                    <i class="fa-regular fa-paste" style="color: var(--text-secondary);"></i> 粘贴源数据
+                    <span class="icon" style="color: var(--text-secondary);" aria-hidden="true">▣</span> 粘贴源数据
                 </div>
                 <div id="modeBadge" class="mode-badge">
-                    <i class="fa-solid fa-bolt"></i> <span id="modeText">智能识别</span>
+                    <span class="icon" aria-hidden="true">↯</span> <span id="modeText">智能识别</span>
                 </div>
             </div>
             
             <div class="input-wrapper">
-                <textarea id="inputText" placeholder="请在此粘贴需要转换的内容...&#10;&#10;系统将自动识别格式并瞬间转换：&#10;- 如果粘贴包含 | 或 空格 → 自动提纯前4项转为 ---&#10;- 如果粘贴包含 --- → 自动还原为 |" oninput="handleInput()"></textarea>
-                <button class="clear-btn" onclick="clearAll()" title="清空">
-                    <i class="fa-solid fa-xmark"></i>
+                <textarea id="inputText" placeholder="请在此粘贴需要转换的内容...&#10;&#10;自动提取账号、密码、可选辅助邮箱和2FA。&#10;没有辅助邮箱时会自动跳过；检测到 --- 时会自动还原为 |。" oninput="handleInput()"></textarea>
+                <button class="clear-btn" type="button" onclick="clearAll()" title="清空" aria-label="清空">
+                    <span class="icon" aria-hidden="true">×</span>
                 </button>
             </div>
             <div class="stats-mini">
-                <span id="inputStats">行数: 0</span>
+                <span id="inputStats">有效行: <strong>0</strong></span>
             </div>
         </div>
 
         <div class="card" id="outputPanel" style="display: none;">
             <div class="section-title">
                 <div class="label" style="color: var(--success);">
-                    <i class="fa-solid fa-check-circle"></i> 转换结果
+                    <span class="icon" aria-hidden="true">✓</span> 转换结果
                 </div>
             </div>
 
             <div class="output-wrapper">
                 <textarea id="outputText" readonly></textarea>
                 <!-- 悬浮一键复制按钮 -->
-                <button class="floating-copy-btn" id="copyBtn" onclick="executeCopy()">
-                    <i class="fa-regular fa-copy" id="copyIcon"></i>
+                <button class="floating-copy-btn" id="copyBtn" type="button" onclick="executeCopy()" aria-label="复制转换结果">
+                    <span class="icon" id="copyIcon" aria-hidden="true">⧉</span>
+                    <span id="copyText">复制</span>
                 </button>
             </div>
 
@@ -295,7 +310,7 @@
             </div>
 
             <div id="copyWarningBanner" class="clipboard-warning-banner">
-                <i class="fa-solid fa-circle-info"></i>
+                <span class="icon" aria-hidden="true">i</span>
                 <div class="banner-text">
                     由于浏览器限制未能自动复制，已为您<strong>全选文字</strong>，请长按文本框点击<strong>「拷贝」</strong>。
                 </div>
@@ -313,6 +328,18 @@
         const modeText = document.getElementById('modeText');
         const toast = document.getElementById('toast');
         let toastTimer = null;
+        const EMAIL_REGEX_SOURCE = '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}';
+        const HARD_DELIMITERS = ['|', '\t', ',', ';', '，', '；'];
+        const ACCOUNT_LABELS = ['登录账号', '账号', '账户', '邮箱', 'email', 'mail', 'login', 'username', 'user'];
+        const PASSWORD_LABELS = ['登录密码', '密码', 'password', 'passwd', 'pass', 'pwd'];
+        const RECOVERY_LABELS = ['辅助邮箱', '辅助邮件', '恢复邮箱', '恢复邮件', '备用邮箱', '密保邮箱', 'recovery email', 'recovery mail', 'recovery'];
+        const TWO_FACTOR_LABELS = ['google authenticator', 'authenticator', 'two factor', '2fa', 'totp', 'otp', '谷歌验证码', '谷歌验证', '谷歌密钥', '验证密钥', '动态密钥', '两步验证', '二步验证', '2步验证', '验证码', '密钥'];
+        const ALL_FIELD_LABELS = ACCOUNT_LABELS.concat(PASSWORD_LABELS, RECOVERY_LABELS, TWO_FACTOR_LABELS);
+        const ALL_FIELD_LABEL_PATTERN = ALL_FIELD_LABELS
+            .slice()
+            .sort((a, b) => b.length - a.length)
+            .map(escapeRegex)
+            .join('|');
 
         // 触觉反馈辅助函数
         function triggerHaptic(type = 'light') {
@@ -326,12 +353,15 @@
         // 实时输入处理
         function handleInput() {
             const text = inputText.value;
-            const inLines = text.split('\n').length;
-            document.getElementById('inputStats').innerHTML = `行数: <strong>${text ? inLines : 0}</strong>`;
+            const lines = text.split(/\r?\n|\r/);
+            const effectiveLines = lines.filter(line => line.trim()).length;
+            document.getElementById('inputStats').innerHTML = `有效行: <strong>${effectiveLines}</strong>`;
             
             if (!text.trim()) {
+                outputText.value = '';
                 outputPanel.style.display = 'none';
                 modeBadge.classList.remove('show');
+                document.getElementById('copyWarningBanner').classList.remove('show');
                 return;
             }
 
@@ -359,7 +389,6 @@
             }
 
             // 转换逻辑
-            const lines = text.split(/\r?\n/);
             const convertedLines = [];
             let skippedCount = 0;
 
@@ -368,22 +397,10 @@
                     const trimmed = line.trim();
                     if (!trimmed) { skippedCount++; return; }
 
-                    let parts = [];
-                    if (trimmed.includes('|')) parts = trimmed.split('|');
-                    else if (trimmed.includes('\t')) parts = trimmed.split('\t');
-                    else parts = [trimmed];
+                    const credential = extractCredential(trimmed);
 
-                    parts = parts.map(p => p.trim()).filter(p => p !== '');
-                    
-                    const email = parts[0] || '';
-                    const pwd = parts[1] || '';
-                    const rec = parts[2] || '';
-                    const code = parts[3] || '';
-
-                    if (email) {
-                        // 只提取前 4 个核心字段，丢弃多余杂质
-                        let result = `${email}---${pwd}---${rec}---${code}`;
-                        convertedLines.push(result);
+                    if (credential) {
+                        convertedLines.push(formatCredential(credential));
                     } else {
                         skippedCount++;
                     }
@@ -392,7 +409,7 @@
                 lines.forEach(line => {
                     const trimmed = line.trim();
                     if (!trimmed) { skippedCount++; return; }
-                    const parts = trimmed.split('---').map(p => p.trim());
+                    const parts = trimmed.split('---').map(p => p.trim()).filter(Boolean);
                     if (parts.length > 0 && parts[0]) convertedLines.push(parts.join('|'));
                     else skippedCount++;
                 });
@@ -409,12 +426,256 @@
             }
         }
 
+        function escapeRegex(value) {
+            return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        }
+
+        function extractCredential(line) {
+            const cleaned = line.trim().replace(/^\uFEFF/, '');
+            const hardFields = splitHardDelimitedLine(cleaned);
+            const fields = hardFields || splitForwardLine(cleaned);
+
+            const labeledAccount = extractLabeledValue(cleaned, ACCOUNT_LABELS);
+            const labeledPassword = extractLabeledValue(cleaned, PASSWORD_LABELS);
+            const labeledRecovery = extractLabeledValue(cleaned, RECOVERY_LABELS);
+            const labeledTwoFactor = extractLabeledValue(cleaned, TWO_FACTOR_LABELS);
+
+            const account = normalizeAccount(labeledAccount) || findAccount(cleaned, fields);
+            const passwordInfo = normalizePassword(labeledPassword)
+                ? { value: normalizePassword(labeledPassword), index: -1 }
+                : findPassword(cleaned, fields, account);
+            const password = passwordInfo.value;
+
+            const recovery = normalizeRecovery(labeledRecovery)
+                || findRecovery(fields, account, passwordInfo.index);
+            const twoFactor = normalizeTwoFactor(extractTwoFactorSecret(labeledTwoFactor))
+                || findTwoFactor(cleaned, hardFields, account, password, recovery, passwordInfo.index);
+
+            if (!account || !password || !twoFactor) return null;
+
+            return {
+                account,
+                password,
+                recovery,
+                twoFactor,
+            };
+        }
+
+        function formatCredential(credential) {
+            const parts = [credential.account, credential.password];
+            if (credential.recovery) parts.push(credential.recovery);
+            parts.push(credential.twoFactor);
+            return parts.join('---');
+        }
+
+        function splitHardDelimitedLine(line) {
+            const trimmed = line.trim().replace(/^\uFEFF/, '');
+            const selectedDelimiter = HARD_DELIMITERS.find(delimiter => trimmed.includes(delimiter));
+
+            if (!selectedDelimiter) return null;
+            return trimmed.split(selectedDelimiter).map(part => cleanFieldValue(part)).filter(Boolean);
+        }
+
+        function splitForwardLine(line) {
+            const trimmed = line.trim().replace(/^\uFEFF/, '');
+            const hardFields = splitHardDelimitedLine(trimmed);
+            if (hardFields) return hardFields;
+            return trimmed.split(/\s+/).map(part => cleanFieldValue(part)).filter(Boolean);
+        }
+
+        function extractLabeledValue(line, labels) {
+            const labelPattern = labels
+                .slice()
+                .sort((a, b) => b.length - a.length)
+                .map(escapeRegex)
+                .join('|');
+            const matcher = new RegExp(
+                `(?:^|[\\s|,;，；\\[{(])(?:${labelPattern})\\s*[:：=]\\s*([\\s\\S]*?)(?=\\s+(?:${ALL_FIELD_LABEL_PATTERN})\\s*[:：=]|[|,;，；\\n]|$)`,
+                'i'
+            );
+            const match = line.match(matcher);
+            return match ? cleanFieldValue(match[1]) : '';
+        }
+
+        function cleanFieldValue(value) {
+            if (!value) return '';
+            return value
+                .trim()
+                .replace(/^["'“”‘’`]+|["'“”‘’`]+$/g, '')
+                .replace(new RegExp(`^(?:${ALL_FIELD_LABEL_PATTERN})\\s*[:：=]\\s*`, 'i'), '')
+                .trim();
+        }
+
+        function trimToken(value) {
+            return cleanFieldValue(value)
+                .replace(/^[\s"'“”‘’`<[{(]+|[\s"'“”‘’`>\]}).,，;；]+$/g, '')
+                .trim();
+        }
+
+        function extractEmails(value) {
+            return value.match(new RegExp(EMAIL_REGEX_SOURCE, 'gi')) || [];
+        }
+
+        function normalizeAccount(value) {
+            const email = extractEmails(value)[0];
+            if (email) return email;
+
+            const token = trimToken(value).match(/[^\s|,;，；]+/)?.[0] || '';
+            return token && !looksLikeNoiseToken(token) ? token : '';
+        }
+
+        function normalizeRecovery(value) {
+            return extractEmails(value)[0] || '';
+        }
+
+        function normalizePassword(value) {
+            const token = trimToken(value).match(/[^\s|,;，；]+/)?.[0] || '';
+            if (!token || extractEmails(token).length || looksLikeNoiseToken(token)) return '';
+            return token;
+        }
+
+        function normalizeTwoFactor(value) {
+            return trimToken(value).replace(/\s+/g, ' ');
+        }
+
+        function findAccount(line, fields) {
+            const email = extractEmails(line)[0];
+            if (email) return email;
+
+            for (const field of fields) {
+                const account = normalizeAccount(field);
+                if (account) return account;
+            }
+
+            return '';
+        }
+
+        function findPassword(line, fields, account) {
+            const accountIndex = findFieldIndex(fields, account);
+            const startIndex = accountIndex >= 0 ? accountIndex + 1 : 0;
+
+            for (let i = startIndex; i < fields.length; i++) {
+                const password = normalizePassword(fields[i]);
+                if (password) return { value: password, index: i };
+            }
+
+            if (account) {
+                const afterAccount = textAfterValue(line, account);
+                const token = (afterAccount.match(/[^\s|,;，；]+/g) || [])
+                    .map(normalizePassword)
+                    .find(Boolean);
+                if (token) return { value: token, index: -1 };
+            }
+
+            return { value: '', index: -1 };
+        }
+
+        function findRecovery(fields, account, passwordIndex) {
+            const startIndex = passwordIndex >= 0 ? passwordIndex + 1 : 0;
+            const accountLower = (account || '').toLowerCase();
+
+            for (let i = startIndex; i < fields.length; i++) {
+                const email = extractEmails(fields[i]).find(item => item.toLowerCase() !== accountLower);
+                if (email) return email;
+                if (extractTwoFactorSecret(fields[i])) break;
+            }
+
+            return '';
+        }
+
+        function findTwoFactor(line, hardFields, account, password, recovery, passwordIndex) {
+            if (hardFields) {
+                const recoveryIndex = recovery ? findFieldIndex(hardFields, recovery) : -1;
+                const startIndex = recoveryIndex >= 0
+                    ? recoveryIndex + 1
+                    : (passwordIndex >= 0 ? passwordIndex + 1 : 0);
+                const value = hardFields.slice(startIndex).join(' ');
+                return normalizeTwoFactor(extractTwoFactorSecret(value));
+            }
+
+            const anchor = recovery || password || account;
+            const value = anchor ? textAfterValue(line, anchor) : line;
+            return normalizeTwoFactor(extractTwoFactorSecret(value));
+        }
+
+        function findFieldIndex(fields, value) {
+            if (!value) return -1;
+            const lowerValue = value.toLowerCase();
+            return fields.findIndex(field => field.toLowerCase().includes(lowerValue));
+        }
+
+        function textAfterValue(line, value) {
+            const index = line.toLowerCase().indexOf(String(value).toLowerCase());
+            if (index < 0) return '';
+            return line.slice(index + String(value).length).replace(/^[\s|,;，；:\-=]+/, '').trim();
+        }
+
+        function extractTwoFactorSecret(value) {
+            if (!value) return '';
+
+            let candidate = cleanFieldValue(value);
+            const labeled = extractLabeledValue(candidate, TWO_FACTOR_LABELS);
+            if (labeled) candidate = labeled;
+
+            const uriSecret = extractOtpAuthSecret(candidate);
+            if (uriSecret) return uriSecret;
+
+            candidate = cutCredentialNoiseTail(candidate);
+            const grouped = candidate.match(/\b(?:[A-Za-z0-9]{4}[\s-]+){2,}[A-Za-z0-9]{4}\b/);
+            if (grouped) return normalizeTwoFactor(grouped[0]);
+
+            const compact = candidate.match(/\b[A-Za-z0-9]{8,}\b/);
+            if (compact) return normalizeTwoFactor(compact[0]);
+
+            const shortToken = candidate.match(/\b[A-Za-z0-9]{4,7}\b/);
+            return shortToken ? normalizeTwoFactor(shortToken[0]) : '';
+        }
+
+        function extractOtpAuthSecret(value) {
+            const match = value.match(/[?&]secret=([^&#\s]+)/i);
+            if (!match) return '';
+            try {
+                return decodeURIComponent(match[1]).replace(/\+/g, ' ').trim();
+            } catch (e) {
+                return match[1].trim();
+            }
+        }
+
+        function cutCredentialNoiseTail(value) {
+            let result = cleanFieldValue(value).replace(/\s+/g, ' ').trim();
+            const noisePatterns = [
+                /\s+\d{4}[-/年]\d{1,2}[-/月]\d{1,2}/,
+                /\s+\d{1,2}:\d{2}(?::\d{2})?/,
+                /\s+(?:已经|已|账号凭证|凭证|获取成功|订阅|成功|失败)/,
+                /\s*[{\[]\s*["']?(?:client_id|client_secret|token)/i,
+                /\s+(?:client_id|client_secret)\b/i,
+            ];
+
+            noisePatterns.forEach(pattern => {
+                const match = result.match(pattern);
+                if (match && match.index > 0) {
+                    result = result.slice(0, match.index).trim();
+                }
+            });
+
+            return result;
+        }
+
+        function looksLikeNoiseToken(value) {
+            return /^(?:\d{4}[-/]\d{1,2}[-/]\d{1,2}|\d{1,2}:\d{2}(?::\d{2})?|已经|已|账号凭证|凭证|获取成功|订阅|成功|失败)$/i.test(value);
+        }
+
         function clearAll() {
             triggerHaptic('clear');
             inputText.value = '';
+            outputText.value = '';
             outputPanel.style.display = 'none';
             modeBadge.classList.remove('show');
-            document.getElementById('inputStats').innerHTML = `行数: <strong>0</strong>`;
+            modeText.innerText = '智能识别';
+            document.getElementById('inputStats').innerHTML = `有效行: <strong>0</strong>`;
+            document.getElementById('outputStats').innerHTML = `成功: <strong>0</strong> 行`;
+            document.getElementById('skipStats').innerHTML = `忽略: <strong>0</strong> 行`;
+            document.getElementById('copyWarningBanner').classList.remove('show');
             inputText.focus();
         }
 
@@ -434,12 +695,15 @@
             
             const btn = document.getElementById('copyBtn');
             const icon = document.getElementById('copyIcon');
+            const copyText = document.getElementById('copyText');
             btn.classList.add('copied');
-            icon.className = 'fa-solid fa-check';
+            icon.innerText = '✓';
+            copyText.innerText = '已复制';
             
             setTimeout(() => {
                 btn.classList.remove('copied');
-                icon.className = 'fa-regular fa-copy';
+                icon.innerText = '⧉';
+                copyText.innerText = '复制';
             }, 1500);
 
             try {
@@ -468,6 +732,7 @@
                 setTimeout(() => { window.getSelection().removeAllRanges(); outputText.blur(); }, 500);
             } else {
                 document.getElementById('copyWarningBanner').classList.add('show');
+                showToast('请长按全选内容后拷贝', 'error');
             }
         }
     </script>
