@@ -189,6 +189,30 @@ async function test(name, fn) {
     );
   });
 
+  await test('already converted no-recovery rows stay dashed and drop log tail', () => {
+    const harness = createHarness();
+
+    harness.elements.inputText.value = 'buyer@gmail.com---Pa55word---abcd efgh ijkl mnop 2026-07-09 12:30:00 已经订阅 账号凭证日志 JSON token {"token":"example-token"}';
+    harness.context.handleInput();
+
+    assert.strictEqual(
+      harness.elements.outputText.value,
+      'buyer@gmail.com---Pa55word---abcd efgh ijkl mnop',
+    );
+  });
+
+  await test('already converted recovery rows stay dashed and drop token tail', () => {
+    const harness = createHarness();
+
+    harness.elements.inputText.value = 'buyer@gmail.com---Pa55word---helper@gmail.com---abcd efgh ijkl mnop Johnson token {"client_id":"example-client-id.apps.example.test"}';
+    harness.context.handleInput();
+
+    assert.strictEqual(
+      harness.elements.outputText.value,
+      'buyer@gmail.com---Pa55word---helper@gmail.com---abcd efgh ijkl mnop',
+    );
+  });
+
   await test('input stats count non-empty rows, not trailing blank lines', () => {
     const harness = createHarness();
 
