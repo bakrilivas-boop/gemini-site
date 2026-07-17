@@ -465,7 +465,7 @@
             const hasRecovery = possibleRecovery && possibleRecovery.toLowerCase() !== account.toLowerCase();
             const recovery = hasRecovery ? possibleRecovery : '';
             const twoFactorSource = (hasRecovery ? parts.slice(3) : parts.slice(2)).join(' ');
-            const twoFactor = normalizeTwoFactor(extractTwoFactorSecret(twoFactorSource));
+            const twoFactor = normalizeTwoFactor(extractTwoFactorSecret(twoFactorSource, false));
             if (!twoFactor) return '';
 
             return formatCredential({ account, password, recovery, twoFactor });
@@ -476,7 +476,7 @@
             const selectedDelimiter = HARD_DELIMITERS.find(delimiter => trimmed.includes(delimiter));
 
             if (!selectedDelimiter) return null;
-            return trimmed.split(selectedDelimiter).map(part => cleanFieldValue(part)).filter(Boolean);
+            return trimmed.split(selectedDelimiter).map(part => cleanFieldValue(part));
         }
 
         function splitForwardLine(line) {
@@ -592,8 +592,8 @@
                 const startIndex = recoveryIndex >= 0
                     ? recoveryIndex + 1
                     : (passwordIndex >= 0 ? passwordIndex + 1 : 0);
-                const value = hardFields.slice(startIndex).join(' ');
-                return normalizeTwoFactor(extractTwoFactorSecret(value));
+                const value = hardFields.slice(startIndex).find(field => field.trim()) || '';
+                return normalizeTwoFactor(extractTwoFactorSecret(value, false));
             }
 
             const anchor = recovery || password || account;
@@ -613,7 +613,7 @@
             return line.slice(index + String(value).length).replace(/^[\s|,;，；:\-=]+/, '').trim();
         }
 
-        function extractTwoFactorSecret(value) {
+        function extractTwoFactorSecret(value, allowShort = true) {
             if (!value) return '';
 
             let candidate = cleanFieldValue(value);
@@ -624,12 +624,16 @@
             if (uriSecret) return uriSecret;
 
             candidate = cutCredentialNoiseTail(candidate);
-            const grouped = candidate.match(/\b(?:[A-Za-z0-9]{4}[\s-]+){2,}[A-Za-z0-9]{4}\b/);
-            if (grouped) return normalizeTwoFactor(grouped[0]);
-
-            const compact = candidate.match(/\b[A-Za-z0-9]{8,}\b/);
+            const compactPattern = allowShort
+                ? /\b[A-Za-z0-9]{8,}\b/
+                : /\b[A-Za-z0-9]{16,}\b/;
+            const compact = candidate.match(compactPattern);
             if (compact) return normalizeTwoFactor(compact[0]);
 
+            const grouped = candidate.match(/\b(?:[A-Za-z0-9]{4}[\s-]+){3,}[A-Za-z0-9]{4}\b/);
+            if (grouped) return normalizeTwoFactor(grouped[0]);
+
+            if (!allowShort) return '';
             const shortToken = candidate.match(/\b[A-Za-z0-9]{4,7}\b/);
             return shortToken ? normalizeTwoFactor(shortToken[0]) : '';
         }

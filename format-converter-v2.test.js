@@ -165,6 +165,28 @@ async function test(name, fn) {
     );
   });
 
+  await test('pipe conversion keeps compact 2FA instead of year and country metadata', () => {
+    const harness = createHarness();
+
+    harness.elements.inputText.value = 'buyer@example.com|Pa55word|helper@example.com|ABCD2345EFGH6789JKLM2345NPQR6789|2024|Hong Kong 2026-07-16 09:00:05 订阅成功';
+    harness.context.handleInput();
+
+    assert.strictEqual(
+      harness.elements.outputText.value,
+      'buyer@example.com---Pa55word---helper@example.com---ABCD2345EFGH6789JKLM2345NPQR6789',
+    );
+  });
+
+  await test('pipe conversion skips rows when 2FA is missing before metadata', () => {
+    const harness = createHarness();
+
+    harness.elements.inputText.value = 'buyer@example.com|Pa55word|helper@example.com|2024|Hong Kong 2026-07-16 09:00:05 订阅成功';
+    harness.context.handleInput();
+
+    assert.strictEqual(harness.elements.outputText.value, '');
+    assert.strictEqual(harness.elements.outputPanel.style.display, 'none');
+  });
+
   await test('forward conversion keeps recovery email when present', () => {
     const harness = createHarness();
 
@@ -225,7 +247,7 @@ async function test(name, fn) {
   await test('clearAll clears stale output, warning, and stats', () => {
     const harness = createHarness();
 
-    harness.elements.inputText.value = 'user@gmail.com|pass|recovery@gmail.com|SECRET';
+    harness.elements.inputText.value = 'user@gmail.com|pass|recovery@gmail.com|ABCDEFGHIJKLMNOP';
     harness.context.handleInput();
     harness.elements.copyWarningBanner.classList.add('show');
 

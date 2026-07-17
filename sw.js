@@ -1,4 +1,4 @@
-const CACHE_NAME = 'g-auth-v5';
+const CACHE_NAME = 'g-auth-v6';
 const urlsToCache = [
   './index.html',
   './style.css',
@@ -26,7 +26,7 @@ self.addEventListener('activate', event => {
         cacheNames.filter(name => name !== CACHE_NAME)
           .map(name => caches.delete(name))
       );
-    })
+    }).then(() => self.clients.claim())
   );
 });
 
