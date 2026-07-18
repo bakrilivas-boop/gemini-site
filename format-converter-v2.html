@@ -473,10 +473,35 @@
 
         function splitHardDelimitedLine(line) {
             const trimmed = line.trim().replace(/^\uFEFF/, '');
+            const doubleDashFields = splitExactDoubleDashLine(trimmed);
+            if (doubleDashFields) return doubleDashFields;
+
             const selectedDelimiter = HARD_DELIMITERS.find(delimiter => trimmed.includes(delimiter));
 
             if (!selectedDelimiter) return null;
             return trimmed.split(selectedDelimiter).map(part => cleanFieldValue(part));
+        }
+
+        function splitExactDoubleDashLine(line) {
+            const fields = [];
+            let fieldStart = 0;
+
+            for (let index = 0; index < line.length - 1; index++) {
+                const isExactDoubleDash = line[index] === '-'
+                    && line[index + 1] === '-'
+                    && line[index - 1] !== '-'
+                    && line[index + 2] !== '-';
+
+                if (!isExactDoubleDash) continue;
+
+                fields.push(cleanFieldValue(line.slice(fieldStart, index)));
+                fieldStart = index + 2;
+                index++;
+            }
+
+            if (!fields.length) return null;
+            fields.push(cleanFieldValue(line.slice(fieldStart)));
+            return fields;
         }
 
         function splitForwardLine(line) {
@@ -629,6 +654,8 @@
                 : /\b[A-Za-z0-9]{16,}\b/;
             const compact = candidate.match(compactPattern);
             if (compact) return normalizeTwoFactor(compact[0]);
+
+            if (!allowShort && /^(?:19|20)\d{2}(?:\b|[-/])/.test(candidate)) return '';
 
             const grouped = candidate.match(/\b(?:[A-Za-z0-9]{4}[\s-]+){3,}[A-Za-z0-9]{4}\b/);
             if (grouped) return normalizeTwoFactor(grouped[0]);

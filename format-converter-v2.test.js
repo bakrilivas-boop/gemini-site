@@ -165,6 +165,28 @@ async function test(name, fn) {
     );
   });
 
+  await test('double-dash conversion extracts grouped 2FA and drops log data', () => {
+    const harness = createHarness();
+
+    harness.elements.inputText.value = 'shopper@example.com--Pa55word@--7cpz n5te hwvm vklb hrkg 5qw6 eow2 7nnx 账号凭证获取成功 {"client_id":"example-client-id.apps.example.test","client_secret":"example-client-secret","token":"example-token"}';
+    harness.context.handleInput();
+
+    assert.strictEqual(
+      harness.elements.outputText.value,
+      'shopper@example.com---Pa55word@---7cpz n5te hwvm vklb hrkg 5qw6 eow2 7nnx',
+    );
+  });
+
+  await test('double-dash conversion skips metadata when 2FA is missing', () => {
+    const harness = createHarness();
+
+    harness.elements.inputText.value = 'shopper@example.com--Pa55word@--2024 Hong Kong 2026-07-18 09:00:05 账号凭证获取成功';
+    harness.context.handleInput();
+
+    assert.strictEqual(harness.elements.outputText.value, '');
+    assert.strictEqual(harness.elements.outputPanel.style.display, 'none');
+  });
+
   await test('pipe conversion keeps compact 2FA instead of year and country metadata', () => {
     const harness = createHarness();
 
