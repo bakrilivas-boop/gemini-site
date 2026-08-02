@@ -417,13 +417,64 @@
 
         function extractCredential(line) {
             const cleaned = line.trim().replace(/^\uFEFF/, '');
+            const changeMarker = cleaned.match(/2fa\s*修改成功/i);
+            if (changeMarker) {
+                return extractChangedTwoFactorCredential(cleaned, changeMarker);
+            }
+
+            return extractStandardCredential(cleaned);
+        }
+
+        function extractChangedTwoFactorCredential(line, changeMarker) {
+            const originalText = line.slice(0, changeMarker.index).trim();
+            const changedText = line.slice(changeMarker.index + changeMarker[0].length).trim();
+            const original = extractCredentialIdentity(originalText);
+            const changed = extractStandardCredential(changedText);
+
+            if (!original || !changed) return null;
+
+            return {
+                account: original.account,
+                password: original.password,
+                recovery: original.recovery,
+                twoFactor: changed.twoFactor,
+            };
+        }
+
+        function extractStandardCredential(line) {
+            const cleaned = line.trim().replace(/^\uFEFF/, '');
+            const identity = extractCredentialIdentity(cleaned);
+            if (!identity) return null;
+
+            const labeledTwoFactor = extractLabeledValue(cleaned, TWO_FACTOR_LABELS);
+            const twoFactor = normalizeTwoFactor(extractTwoFactorSecret(labeledTwoFactor))
+                || findTwoFactor(
+                    cleaned,
+                    identity.hardFields,
+                    identity.account,
+                    identity.password,
+                    identity.recovery,
+                    identity.passwordInfo.index,
+                );
+
+            if (!twoFactor) return null;
+
+            return {
+                account: identity.account,
+                password: identity.password,
+                recovery: identity.recovery,
+                twoFactor,
+            };
+        }
+
+        function extractCredentialIdentity(line) {
+            const cleaned = line.trim().replace(/^\uFEFF/, '');
             const hardFields = splitHardDelimitedLine(cleaned);
             const fields = hardFields || splitForwardLine(cleaned);
 
             const labeledAccount = extractLabeledValue(cleaned, ACCOUNT_LABELS);
             const labeledPassword = extractLabeledValue(cleaned, PASSWORD_LABELS);
             const labeledRecovery = extractLabeledValue(cleaned, RECOVERY_LABELS);
-            const labeledTwoFactor = extractLabeledValue(cleaned, TWO_FACTOR_LABELS);
 
             const account = normalizeAccount(labeledAccount) || findAccount(cleaned, fields);
             const passwordInfo = normalizePassword(labeledPassword)
@@ -433,16 +484,15 @@
 
             const recovery = normalizeRecovery(labeledRecovery)
                 || findRecovery(fields, account, passwordInfo.index);
-            const twoFactor = normalizeTwoFactor(extractTwoFactorSecret(labeledTwoFactor))
-                || findTwoFactor(cleaned, hardFields, account, password, recovery, passwordInfo.index);
 
-            if (!account || !password || !twoFactor) return null;
+            if (!account || !password) return null;
 
             return {
                 account,
                 password,
                 recovery,
-                twoFactor,
+                hardFields,
+                passwordInfo,
             };
         }
 
