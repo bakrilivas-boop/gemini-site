@@ -334,6 +334,7 @@
         const PASSWORD_LABELS = ['登录密码', '密码', 'password', 'passwd', 'pass', 'pwd'];
         const RECOVERY_LABELS = ['辅助邮箱', '辅助邮件', '恢复邮箱', '恢复邮件', '备用邮箱', '密保邮箱', 'recovery email', 'recovery mail', 'recovery'];
         const TWO_FACTOR_LABELS = ['google authenticator', 'authenticator', 'two factor', '2fa', 'totp', 'otp', '谷歌验证码', '谷歌验证', '谷歌密钥', '验证密钥', '动态密钥', '两步验证', '二步验证', '2步验证', '验证码', '密钥'];
+        const TWO_FACTOR_CHANGE_PATTERN = /2fa\s*修改成功/i;
         const ALL_FIELD_LABELS = ACCOUNT_LABELS.concat(PASSWORD_LABELS, RECOVERY_LABELS, TWO_FACTOR_LABELS);
         const ALL_FIELD_LABEL_PATTERN = ALL_FIELD_LABELS
             .slice()
@@ -341,11 +342,12 @@
             .map(escapeRegex)
             .join('|');
         const CREDENTIAL_NOISE_PATTERNS = [
-            /\s+\d{4}[-/年]\d{1,2}[-/月]\d{1,2}/,
-            /\s+\d{1,2}:\d{2}(?::\d{2})?/,
-            /\s+(?:已经|已|账号凭证|凭证|获取成功|订阅|成功|失败|日志)/,
+            /(?:^|\s+)\d{4}[-/年]\d{1,2}[-/月]\d{1,2}/,
+            /(?:^|\s+)\d{1,2}:\d{2}(?::\d{2})?/,
+            /(?:^|\s+)(?:已经|已|账号凭证|凭证|获取成功|订阅|成功|失败|日志)/,
             /\s*[{\[]\s*["']?(?:client_id|client_secret|token)/i,
-            /\s+(?:johnson|json|token|client_id|client_secret)\b/i,
+            /(?:^|\s+)(?:johnson|json)\s+(?:token|client_id|client_secret)\b/i,
+            /(?:^|\s+)(?:json|token|client_id|client_secret)\b(?=\s*[:：={])/i,
         ];
 
         // 触觉反馈辅助函数
@@ -388,7 +390,10 @@
                 const trimmed = line.trim();
                 if (!trimmed) { skippedCount++; return; }
 
-                const convertedLine = cleanConvertedCredentialLine(trimmed);
+                const isChangedTwoFactorReceipt = TWO_FACTOR_CHANGE_PATTERN.test(trimmed);
+                const convertedLine = isChangedTwoFactorReceipt
+                    ? ''
+                    : cleanConvertedCredentialLine(trimmed);
                 const credential = convertedLine ? null : extractCredential(trimmed);
 
                 if (convertedLine) {
@@ -417,7 +422,7 @@
 
         function extractCredential(line) {
             const cleaned = line.trim().replace(/^\uFEFF/, '');
-            const changeMarker = cleaned.match(/2fa\s*修改成功/i);
+            const changeMarker = cleaned.match(TWO_FACTOR_CHANGE_PATTERN);
             if (changeMarker) {
                 return extractChangedTwoFactorCredential(cleaned, changeMarker);
             }
@@ -432,6 +437,8 @@
             const changed = extractStandardCredential(changedText);
 
             if (!original || !changed) return null;
+            if (original.account.toLowerCase() !== changed.account.toLowerCase()) return null;
+            if (original.password !== changed.password) return null;
 
             return {
                 account: original.account,
@@ -523,7 +530,10 @@
 
         function splitHardDelimitedLine(line) {
             const trimmed = line.trim().replace(/^\uFEFF/, '');
-            const doubleDashFields = splitExactDoubleDashLine(trimmed);
+            const tripleDashFields = splitExactDashDelimitedLine(trimmed, 3);
+            if (tripleDashFields) return tripleDashFields;
+
+            const doubleDashFields = splitExactDashDelimitedLine(trimmed, 2);
             if (doubleDashFields) return doubleDashFields;
 
             const selectedDelimiter = HARD_DELIMITERS.find(delimiter => trimmed.includes(delimiter));
@@ -532,21 +542,21 @@
             return trimmed.split(selectedDelimiter).map(part => cleanFieldValue(part));
         }
 
-        function splitExactDoubleDashLine(line) {
+        function splitExactDashDelimitedLine(line, dashCount) {
             const fields = [];
             let fieldStart = 0;
+            const delimiter = '-'.repeat(dashCount);
 
-            for (let index = 0; index < line.length - 1; index++) {
-                const isExactDoubleDash = line[index] === '-'
-                    && line[index + 1] === '-'
+            for (let index = 0; index <= line.length - dashCount; index++) {
+                const isExactDelimiter = line.slice(index, index + dashCount) === delimiter
                     && line[index - 1] !== '-'
-                    && line[index + 2] !== '-';
+                    && line[index + dashCount] !== '-';
 
-                if (!isExactDoubleDash) continue;
+                if (!isExactDelimiter) continue;
 
                 fields.push(cleanFieldValue(line.slice(fieldStart, index)));
-                fieldStart = index + 2;
-                index++;
+                fieldStart = index + dashCount;
+                index += dashCount - 1;
             }
 
             if (!fields.length) return null;
@@ -730,7 +740,7 @@
 
             CREDENTIAL_NOISE_PATTERNS.forEach(pattern => {
                 const match = result.match(pattern);
-                if (match && match.index > 0) {
+                if (match) {
                     result = result.slice(0, match.index).trim();
                 }
             });

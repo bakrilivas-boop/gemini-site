@@ -1,4 +1,4 @@
-const CACHE_NAME = 'g-auth-v8';
+const CACHE_NAME = 'g-auth-v9';
 const urlsToCache = [
   './index.html',
   './style.css',

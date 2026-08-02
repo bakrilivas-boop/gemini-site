@@ -190,7 +190,7 @@ async function test(name, fn) {
   await test('2FA change receipt keeps original credentials and uses the changed 2FA', () => {
     const harness = createHarness();
 
-    harness.elements.inputText.value = 'original@example.com|OldPass123|helper@example.net|old1 old2 old3 old4 old5 old6 old7 old8|2024|Germany 订阅成功 2026-07-27 06:21:01 2fa修改成功 repeated@example.com--RepeatedPass--new1 new2 new3 new4 new5 new6 new7 new8 账号凭证获取成功 {"client_id":"example-client-id.apps.example.test","client_secret":"example-client-secret","token":"example-token"}';
+    harness.elements.inputText.value = 'original@example.com|OldPass123|helper@example.net|old1 old2 old3 old4 old5 old6 old7 old8|2024|Germany 订阅成功 2026-07-27 06:21:01 2fa修改成功 original@example.com--OldPass123--new1 new2 new3 new4 new5 new6 new7 new8 账号凭证获取成功 {"client_id":"example-client-id.apps.example.test","client_secret":"example-client-secret","token":"example-token"}';
     harness.context.handleInput();
 
     assert.strictEqual(
@@ -207,6 +207,82 @@ async function test(name, fn) {
 
     assert.strictEqual(harness.elements.outputText.value, '');
     assert.strictEqual(harness.elements.outputPanel.style.display, 'none');
+  });
+
+  await test('2FA change receipt does not mistake a leading JSON token for the changed 2FA', () => {
+    const harness = createHarness();
+
+    harness.elements.inputText.value = 'original@example.com|OldPass123|helper@example.net|old1 old2 old3 old4 old5 old6 old7 old8|2024|Germany 订阅成功 2026-07-27 06:21:01 2fa修改成功 original@example.com--OldPass123--{"token":"abcdefghijklmnopqrstuvwxyz234567"}';
+    harness.context.handleInput();
+
+    assert.strictEqual(harness.elements.outputText.value, '');
+    assert.strictEqual(harness.elements.outputPanel.style.display, 'none');
+  });
+
+  await test('2FA change receipt does not mistake a leading token label for the changed 2FA', () => {
+    const harness = createHarness();
+
+    harness.elements.inputText.value = 'original@example.com|OldPass123|helper@example.net|old1 old2 old3 old4 old5 old6 old7 old8|2024|Germany 订阅成功 2026-07-27 06:21:01 2fa修改成功 original@example.com--OldPass123--token: abcdefghijklmnopqrstuvwxyz234567';
+    harness.context.handleInput();
+
+    assert.strictEqual(harness.elements.outputText.value, '');
+    assert.strictEqual(harness.elements.outputPanel.style.display, 'none');
+  });
+
+  await test('2FA change receipt keeps a valid grouped 2FA that starts with json', () => {
+    const harness = createHarness();
+
+    harness.elements.inputText.value = 'original@example.com|OldPass123|helper@example.net|old1 old2 old3 old4 old5 old6 old7 old8|2024|Germany 订阅成功 2026-07-27 06:21:01 2fa修改成功 original@example.com--OldPass123--json abcd efgh ijkl mnop 账号凭证获取成功';
+    harness.context.handleInput();
+
+    assert.strictEqual(
+      harness.elements.outputText.value,
+      'original@example.com---OldPass123---helper@example.net---json abcd efgh ijkl mnop',
+    );
+  });
+
+  await test('2FA change receipt is skipped when the repeated account does not match', () => {
+    const harness = createHarness();
+
+    harness.elements.inputText.value = 'original@example.com|OldPass123|helper@example.net|old1 old2 old3 old4 old5 old6 old7 old8|2024|Germany 订阅成功 2026-07-27 06:21:01 2fa修改成功 another@example.com--OldPass123--new1 new2 new3 new4 new5 new6 new7 new8 账号凭证获取成功';
+    harness.context.handleInput();
+
+    assert.strictEqual(harness.elements.outputText.value, '');
+    assert.strictEqual(harness.elements.outputPanel.style.display, 'none');
+  });
+
+  await test('2FA change receipt is skipped when the repeated password does not match', () => {
+    const harness = createHarness();
+
+    harness.elements.inputText.value = 'original@example.com|OldPass123|helper@example.net|old1 old2 old3 old4 old5 old6 old7 old8|2024|Germany 订阅成功 2026-07-27 06:21:01 2fa修改成功 original@example.com--AnotherPass--new1 new2 new3 new4 new5 new6 new7 new8 账号凭证获取成功';
+    harness.context.handleInput();
+
+    assert.strictEqual(harness.elements.outputText.value, '');
+    assert.strictEqual(harness.elements.outputPanel.style.display, 'none');
+  });
+
+  await test('2FA change receipt supports triple-dash fields and marker spacing', () => {
+    const harness = createHarness();
+
+    harness.elements.inputText.value = 'original@example.com---OldPass123---helper@example.net---old1 old2 old3 old4 old5 old6 old7 old8 2026-07-27 06:21:01 2FA 修改成功：original@example.com---OldPass123---new1 new2 new3 new4 new5 new6 new7 new8 账号凭证获取成功';
+    harness.context.handleInput();
+
+    assert.strictEqual(
+      harness.elements.outputText.value,
+      'original@example.com---OldPass123---helper@example.net---new1 new2 new3 new4 new5 new6 new7 new8',
+    );
+  });
+
+  await test('2FA change receipt keeps working without a recovery email', () => {
+    const harness = createHarness();
+
+    harness.elements.inputText.value = 'original@example.com|OldPass123|old1 old2 old3 old4 old5 old6 old7 old8|2024|Germany 订阅成功 2026-07-27 06:21:01 2fa修改成功 original@example.com--OldPass123--new1 new2 new3 new4 new5 new6 new7 new8 账号凭证获取成功';
+    harness.context.handleInput();
+
+    assert.strictEqual(
+      harness.elements.outputText.value,
+      'original@example.com---OldPass123---new1 new2 new3 new4 new5 new6 new7 new8',
+    );
   });
 
   await test('pipe conversion keeps compact 2FA instead of year and country metadata', () => {
