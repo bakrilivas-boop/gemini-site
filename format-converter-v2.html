@@ -3,6 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data:; connect-src 'none'; font-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+    <meta name="referrer" content="no-referrer">
     <title>谷歌账号格式转换器</title>
     <meta name="description" content="100%本地运行的谷歌账号格式批量转换工具，支持多种分隔符智能识别，隐私安全有保障">
     
@@ -278,7 +280,7 @@
             </div>
             
             <div class="input-wrapper">
-                <textarea id="inputText" placeholder="请在此粘贴需要转换的内容...&#10;&#10;自动提取账号、密码、可选辅助邮箱和2FA。&#10;没有辅助邮箱时会自动跳过；已是 --- 格式也会自动清洗。" oninput="handleInput()"></textarea>
+                <textarea id="inputText" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="请在此粘贴需要转换的内容...&#10;&#10;自动提取账号、密码、可选辅助邮箱和2FA。&#10;没有辅助邮箱时会自动跳过；已是 --- 格式也会自动清洗。" oninput="handleInput()"></textarea>
                 <button class="clear-btn" type="button" onclick="clearAll()" title="清空" aria-label="清空">
                     <span class="icon" aria-hidden="true">×</span>
                 </button>
@@ -296,7 +298,7 @@
             </div>
 
             <div class="output-wrapper">
-                <textarea id="outputText" readonly></textarea>
+                <textarea id="outputText" readonly spellcheck="false"></textarea>
                 <!-- 悬浮一键复制按钮 -->
                 <button class="floating-copy-btn" id="copyBtn" type="button" onclick="executeCopy()" aria-label="复制转换结果">
                     <span class="icon" id="copyIcon" aria-hidden="true">⧉</span>
@@ -363,7 +365,7 @@
 
         // 实时输入处理
         function handleInput() {
-            const text = inputText.value;
+            const text = normalizeCredentialInput(inputText.value);
             const lines = text.split(/\r?\n|\r/);
             const effectiveLines = lines.filter(line => line.trim()).length;
             document.getElementById('inputStats').innerHTML = `有效行: <strong>${effectiveLines}</strong>`;
@@ -416,6 +418,38 @@
             } else {
                 outputPanel.style.display = 'none';
             }
+        }
+
+        function normalizeCredentialInput(text) {
+            const markerJoinedText = text.replace(
+                /(2fa\s*修改成功\s*[：:]?)[ \t]*(?:\r\n|\r|\n)[ \t]*/gi,
+                '$1 ',
+            );
+            const physicalLines = markerJoinedText.split(/\r?\n|\r/);
+            const logicalLines = [];
+
+            physicalLines.forEach(line => {
+                const marker = line.match(TWO_FACTOR_CHANGE_PATTERN);
+                const beforeMarker = marker ? line.slice(0, marker.index) : '';
+                let previousIndex = logicalLines.length - 1;
+
+                while (previousIndex >= 0 && !logicalLines[previousIndex].trim()) {
+                    previousIndex--;
+                }
+
+                const previousLine = previousIndex >= 0 ? logicalLines[previousIndex] : '';
+                const shouldJoinPrevious = marker
+                    && !extractEmails(beforeMarker).length
+                    && Boolean(extractCredentialIdentity(previousLine));
+
+                if (shouldJoinPrevious) {
+                    logicalLines[previousIndex] = `${previousLine.trim()} ${line.trim()}`;
+                } else {
+                    logicalLines.push(line);
+                }
+            });
+
+            return logicalLines.join('\n');
         }
 
         function escapeRegex(value) {
@@ -486,9 +520,10 @@
             const labeledRecovery = extractLabeledValue(cleaned, RECOVERY_LABELS);
 
             const account = normalizeAccount(labeledAccount) || findAccount(cleaned, fields);
-            const passwordInfo = normalizePassword(labeledPassword)
-                ? { value: normalizePassword(labeledPassword), index: -1 }
-                : findPassword(cleaned, fields, account);
+            const labeledPasswordValue = normalizePassword(labeledPassword, true);
+            const passwordInfo = labeledPasswordValue
+                ? { value: labeledPasswordValue, index: -1 }
+                : findPassword(cleaned, fields, account, Boolean(hardFields));
             const password = passwordInfo.value;
 
             const recovery = normalizeRecovery(labeledRecovery)
@@ -517,7 +552,7 @@
             if (parts.length < 3) return '';
 
             const account = normalizeAccount(parts[0]);
-            const password = normalizePassword(parts[1]);
+            const password = normalizePassword(parts[1], true);
             if (!account || !password) return '';
 
             const possibleRecovery = normalizeRecovery(parts[2]);
@@ -618,9 +653,9 @@
             return extractEmails(value)[0] || '';
         }
 
-        function normalizePassword(value) {
-            const token = trimToken(value).match(/[^\s|,;，；]+/)?.[0] || '';
-            if (!token || extractEmails(token).length || looksLikeNoiseToken(token)) return '';
+        function normalizePassword(value, allowEmailLike = false) {
+            const token = cleanFieldValue(value).match(/[^\s|]+/)?.[0] || '';
+            if (!token || (!allowEmailLike && extractEmails(token).length) || looksLikeNoiseToken(token)) return '';
             return token;
         }
 
@@ -640,19 +675,22 @@
             return '';
         }
 
-        function findPassword(line, fields, account) {
+        function findPassword(line, fields, account, allowEmailAtExpectedPosition = false) {
             const accountIndex = findFieldIndex(fields, account);
             const startIndex = accountIndex >= 0 ? accountIndex + 1 : 0;
 
             for (let i = startIndex; i < fields.length; i++) {
-                const password = normalizePassword(fields[i]);
+                const password = normalizePassword(
+                    fields[i],
+                    allowEmailAtExpectedPosition && i === startIndex,
+                );
                 if (password) return { value: password, index: i };
             }
 
             if (account) {
                 const afterAccount = textAfterValue(line, account);
                 const token = (afterAccount.match(/[^\s|,;，；]+/g) || [])
-                    .map(normalizePassword)
+                    .map(value => normalizePassword(value))
                     .find(Boolean);
                 if (token) return { value: token, index: -1 };
             }
@@ -719,12 +757,37 @@
 
             if (!allowShort && /^(?:19|20)\d{2}(?:\b|[-/])/.test(candidate)) return '';
 
-            const grouped = candidate.match(/^(?:[A-Za-z0-9]{4}[\s-]+){3,}[A-Za-z0-9]{4}\b/);
-            if (grouped) return normalizeTwoFactor(grouped[0]);
+            const grouped = extractGroupedTwoFactor(candidate);
+            if (grouped) return normalizeTwoFactor(grouped);
 
             if (!allowShort) return '';
             const shortToken = candidate.match(/^[A-Za-z0-9]{4,7}\b/);
             return shortToken ? normalizeTwoFactor(shortToken[0]) : '';
+        }
+
+        function extractGroupedTwoFactor(value) {
+            const leadingRun = value.match(/^[A-Za-z0-9]{4}(?:[\s-]+[A-Za-z0-9]{4}){3,}/)?.[0] || '';
+            if (!leadingRun) return '';
+
+            const groups = leadingRun.match(/[A-Za-z0-9]{4}/g) || [];
+            const earlyYearIndex = groups.findIndex((group, index) => (
+                index >= 4
+                && index < 8
+                && /^(?:19|20)\d{2}$/.test(group)
+            ));
+            const groupCount = earlyYearIndex >= 0
+                ? 4
+                : Math.min(groups.length, 8);
+
+            let searchFrom = 0;
+            let endIndex = 0;
+            groups.slice(0, groupCount).forEach(group => {
+                const groupIndex = leadingRun.indexOf(group, searchFrom);
+                endIndex = groupIndex + group.length;
+                searchFrom = endIndex;
+            });
+
+            return leadingRun.slice(0, endIndex);
         }
 
         function extractOtpAuthSecret(value) {

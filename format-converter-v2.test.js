@@ -133,6 +133,28 @@ async function test(name, fn) {
     assert(!html.includes('cdnjs.cloudflare.com'));
   });
 
+  await test('page blocks outbound connections and suppresses referrer data', () => {
+    const html = loadHtml();
+    const csp = html.match(/<meta\s+http-equiv="Content-Security-Policy"\s+content="([^"]+)"/i)?.[1] || '';
+    const referrer = html.match(/<meta\s+name="referrer"\s+content="([^"]+)"/i)?.[1] || '';
+
+    assert(csp.includes("connect-src 'none'"));
+    assert(csp.includes("object-src 'none'"));
+    assert.strictEqual(referrer.toLowerCase(), 'no-referrer');
+  });
+
+  await test('credential textareas disable browser text assistance', () => {
+    const html = loadHtml();
+    const inputTag = html.match(/<textarea\s+id="inputText"[^>]*>/i)?.[0] || '';
+    const outputTag = html.match(/<textarea\s+id="outputText"[^>]*>/i)?.[0] || '';
+
+    assert(/autocomplete="off"/i.test(inputTag));
+    assert(/autocapitalize="off"/i.test(inputTag));
+    assert(/autocorrect="off"/i.test(inputTag));
+    assert(/spellcheck="false"/i.test(inputTag));
+    assert(/spellcheck="false"/i.test(outputTag));
+  });
+
   await test('mobile viewport allows pinch zoom', () => {
     const html = loadHtml();
     const viewport = html.match(/<meta\s+name="viewport"\s+content="([^"]+)"/i)?.[1] || '';
@@ -150,6 +172,30 @@ async function test(name, fn) {
     assert.strictEqual(
       harness.elements.outputText.value,
       'user@gmail.com---pass123---recovery@gmail.com---SECRET',
+    );
+  });
+
+  await test('pipe conversion preserves password punctuation exactly', () => {
+    const harness = createHarness();
+
+    harness.elements.inputText.value = 'user@gmail.com|Pa55word.)|recovery@gmail.com|ABCDEFGHIJKLMNOP234567';
+    harness.context.handleInput();
+
+    assert.strictEqual(
+      harness.elements.outputText.value,
+      'user@gmail.com---Pa55word.)---recovery@gmail.com---ABCDEFGHIJKLMNOP234567',
+    );
+  });
+
+  await test('pipe conversion accepts an email-shaped password in the password position', () => {
+    const harness = createHarness();
+
+    harness.elements.inputText.value = 'user@gmail.com|password@example.net|recovery@gmail.com|ABCDEFGHIJKLMNOP234567';
+    harness.context.handleInput();
+
+    assert.strictEqual(
+      harness.elements.outputText.value,
+      'user@gmail.com---password@example.net---recovery@gmail.com---ABCDEFGHIJKLMNOP234567',
     );
   });
 
@@ -240,6 +286,72 @@ async function test(name, fn) {
     assert.strictEqual(
       harness.elements.outputText.value,
       'original@example.com---OldPass123---helper@example.net---ABCDEFGHIJKLMNOP234567',
+    );
+  });
+
+  await test('2FA change receipt supports a physical newline after the success marker', () => {
+    const harness = createHarness();
+
+    harness.elements.inputText.value = 'original@example.com|OldPass123|helper@example.net|old1 old2 old3 old4 old5 old6 old7 old8|2024|Germany 订阅成功 2026-08-04 02:51:00 2fa修改成功\noriginal@example.com--OldPass123--fa01 fa02 fa03 fa04 fa05 fa06 fa07 fa08 账号凭证获取成功';
+    harness.context.handleInput();
+
+    assert.strictEqual(
+      harness.elements.outputText.value,
+      'original@example.com---OldPass123---helper@example.net---fa01 fa02 fa03 fa04 fa05 fa06 fa07 fa08',
+    );
+  });
+
+  await test('2FA change receipt supports a timestamp and success marker on the next line', () => {
+    const harness = createHarness();
+
+    harness.elements.inputText.value = 'original@example.com|OldPass123|helper@example.net|old1 old2 old3 old4 old5 old6 old7 old8|2024|Germany 订阅成功\n02:51:00 2fa修改成功\noriginal@example.com--OldPass123--fa01 fa02 fa03 fa04 fa05 fa06 fa07 fa08 账号凭证获取成功';
+    harness.context.handleInput();
+
+    assert.strictEqual(
+      harness.elements.outputText.value,
+      'original@example.com---OldPass123---helper@example.net---fa01 fa02 fa03 fa04 fa05 fa06 fa07 fa08',
+    );
+  });
+
+  await test('two complete 2FA change receipts remain separate records', () => {
+    const harness = createHarness();
+
+    harness.elements.inputText.value = [
+      'first@example.com|FirstPass|first-helper@example.net|old1 old2 old3 old4|2024|Germany 订阅成功 02:51:00 2fa修改成功 first@example.com--FirstPass--fa01 fa02 fa03 fa04 账号凭证获取成功',
+      'second@example.com|SecondPass|second-helper@example.net|old1 old2 old3 old4|2024|Germany 订阅成功 02:52:00 2fa修改成功 second@example.com--SecondPass--fb01 fb02 fb03 fb04 账号凭证获取成功',
+    ].join('\n');
+    harness.context.handleInput();
+
+    assert.strictEqual(
+      harness.elements.outputText.value,
+      [
+        'first@example.com---FirstPass---first-helper@example.net---fa01 fa02 fa03 fa04',
+        'second@example.com---SecondPass---second-helper@example.net---fb01 fb02 fb03 fb04',
+      ].join('\n'),
+    );
+  });
+
+  await test('grouped 2FA does not absorb trailing four-character metadata', () => {
+    const harness = createHarness();
+
+    harness.elements.inputText.value = 'original@example.com|OldPass123|helper@example.net|old1 old2 old3 old4 old5 old6 old7 old8|2024|Germany 订阅成功 2026-08-04 02:51:00 2fa修改成功 original@example.com--OldPass123--fa01 fa02 fa03 fa04 fa05 fa06 fa07 fa08 Hong Kong 2026 账号凭证获取成功';
+    harness.context.handleInput();
+
+    assert.strictEqual(
+      harness.elements.outputText.value,
+      'original@example.com---OldPass123---helper@example.net---fa01 fa02 fa03 fa04 fa05 fa06 fa07 fa08',
+    );
+  });
+
+  await test('four-group 2FA does not absorb trailing four-character metadata', () => {
+    const harness = createHarness();
+
+    harness.elements.inputText.value = 'original@example.com|OldPass123|helper@example.net|old1 old2 old3 old4|2024|Germany 订阅成功 2026-08-04 02:51:00 2fa修改成功 original@example.com--OldPass123--fa01 fa02 fa03 fa04 Hong Kong 2026 账号凭证获取成功';
+    harness.context.handleInput();
+
+    assert.strictEqual(
+      harness.elements.outputText.value,
+      'original@example.com---OldPass123---helper@example.net---fa01 fa02 fa03 fa04',
     );
   });
 
@@ -397,6 +509,41 @@ async function test(name, fn) {
       harness.elements.outputText.value,
       'buyer@gmail.com---Pa55word---helper@gmail.com---abcd efgh ijkl mnop',
     );
+  });
+
+  await test('credential matrix keeps fields isolated across receipt variants', () => {
+    const passwords = ['Pass!42', 'Pass.)', 'mailpass@example.net', 'Pass,;:#'];
+    const tails = [
+      '反重力验证成功 5550102468|https://sms.example.test?token=ExampleSmsApiToken12345',
+      '账号凭证获取成功 {"client_id":"example-client","token":"example-token"}',
+      'Hong Kong 2026 账号凭证获取成功',
+    ];
+
+    for (let index = 0; index < 24; index++) {
+      const harness = createHarness();
+      const account = `matrix${index}@example.com`;
+      const password = passwords[index % passwords.length];
+      const recovery = `helper${index}@example.net`;
+      const separator = index % 2 ? '--' : '---';
+      const marker = index % 2 ? '2fa修改成功' : '2FA 修改成功';
+      const groupCount = index % 3 ? 8 : 4;
+      const prefix = String.fromCharCode(97 + (index % 20));
+      const groups = Array.from(
+        { length: groupCount },
+        (_, groupIndex) => `${prefix}${String(groupIndex).padStart(3, '0')}`,
+      );
+      const changedTwoFactor = groups.join(' ');
+      const markerSeparator = index % 4 === 0 ? '\n' : ' ';
+
+      harness.elements.inputText.value = `${account}|${password}|${recovery}|old1 old2 old3 old4|2024|Germany 订阅成功 2026-08-04 02:51:00 ${marker}${markerSeparator}${account}${separator}${password}${separator}${changedTwoFactor} ${tails[index % tails.length]}`;
+      harness.context.handleInput();
+
+      assert.strictEqual(
+        harness.elements.outputText.value,
+        `${account}---${password}---${recovery}---${changedTwoFactor}`,
+        `matrix case ${index}`,
+      );
+    }
   });
 
   await test('input stats count non-empty rows, not trailing blank lines', () => {
