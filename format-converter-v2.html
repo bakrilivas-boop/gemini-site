@@ -344,7 +344,9 @@
         const CREDENTIAL_NOISE_PATTERNS = [
             /(?:^|\s+)\d{4}[-/年]\d{1,2}[-/月]\d{1,2}/,
             /(?:^|\s+)\d{1,2}:\d{2}(?::\d{2})?/,
-            /(?:^|\s+)(?:已经|已|账号凭证|凭证|获取成功|订阅|成功|失败|日志)/,
+            /(?:^|\s+)(?:\S*验证成功|已经|已|账号凭证|凭证|获取成功|订阅|成功|失败|日志)/,
+            /(?:^|[|,\s])https?:\/\//i,
+            /[?&](?:token|secret|api[_-]?key|apikey)=/i,
             /\s*[{\[]\s*["']?(?:client_id|client_secret|token)/i,
             /(?:^|\s+)(?:johnson|json)\s+(?:token|client_id|client_secret)\b/i,
             /(?:^|\s+)(?:json|token|client_id|client_secret)\b(?=\s*[:：={])/i,
@@ -710,23 +712,26 @@
 
             candidate = cutCredentialNoiseTail(candidate);
             const compactPattern = allowShort
-                ? /\b[A-Za-z0-9]{8,}\b/
-                : /\b[A-Za-z0-9]{16,}\b/;
+                ? /^[A-Za-z0-9]{8,}\b/
+                : /^[A-Za-z0-9]{16,}\b/;
             const compact = candidate.match(compactPattern);
             if (compact) return normalizeTwoFactor(compact[0]);
 
             if (!allowShort && /^(?:19|20)\d{2}(?:\b|[-/])/.test(candidate)) return '';
 
-            const grouped = candidate.match(/\b(?:[A-Za-z0-9]{4}[\s-]+){3,}[A-Za-z0-9]{4}\b/);
+            const grouped = candidate.match(/^(?:[A-Za-z0-9]{4}[\s-]+){3,}[A-Za-z0-9]{4}\b/);
             if (grouped) return normalizeTwoFactor(grouped[0]);
 
             if (!allowShort) return '';
-            const shortToken = candidate.match(/\b[A-Za-z0-9]{4,7}\b/);
+            const shortToken = candidate.match(/^[A-Za-z0-9]{4,7}\b/);
             return shortToken ? normalizeTwoFactor(shortToken[0]) : '';
         }
 
         function extractOtpAuthSecret(value) {
-            const match = value.match(/[?&]secret=([^&#\s]+)/i);
+            const otpAuthUri = value.match(/\botpauth:\/\/[^\s]+/i)?.[0] || '';
+            if (!otpAuthUri) return '';
+
+            const match = otpAuthUri.match(/[?&]secret=([^&#\s]+)/i);
             if (!match) return '';
             try {
                 return decodeURIComponent(match[1]).replace(/\+/g, ' ').trim();
