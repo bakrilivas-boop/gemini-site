@@ -155,6 +155,23 @@ async function test(name, fn) {
     assert(/spellcheck="false"/i.test(outputTag));
   });
 
+  await test('service worker keeps documents fresh and caches only same-origin GET requests', () => {
+    const serviceWorker = fs.readFileSync('sw.js', 'utf8');
+
+    assert(serviceWorker.includes("request.method !== 'GET'"));
+    assert(serviceWorker.includes('requestUrl.origin !== self.location.origin'));
+    assert(serviceWorker.includes("request.mode === 'navigate'"));
+    assert(serviceWorker.includes("request.destination === 'document'"));
+    assert(serviceWorker.indexOf('fetch(request)') < serviceWorker.indexOf('caches.match(request)'));
+  });
+
+  await test('page registers the service worker without HTTP cache reuse', () => {
+    const html = loadHtml();
+
+    assert(html.includes("navigator.serviceWorker.register('./sw.js'"));
+    assert(html.includes("updateViaCache: 'none'"));
+  });
+
   await test('mobile viewport allows pinch zoom', () => {
     const html = loadHtml();
     const viewport = html.match(/<meta\s+name="viewport"\s+content="([^"]+)"/i)?.[1] || '';
@@ -196,6 +213,74 @@ async function test(name, fn) {
     assert.strictEqual(
       harness.elements.outputText.value,
       'user@gmail.com---password@example.net---recovery@gmail.com---ABCDEFGHIJKLMNOP234567',
+    );
+  });
+
+  await test('semicolon conversion is not confused by a comma in trailing logs', () => {
+    const harness = createHarness();
+
+    harness.elements.inputText.value = 'user@gmail.com;Pass123;recovery@gmail.com;fa01 fa02 fa03 fa04 fa05 fa06 fa07 fa08, trailing log';
+    harness.context.handleInput();
+
+    assert.strictEqual(
+      harness.elements.outputText.value,
+      'user@gmail.com---Pass123---recovery@gmail.com---fa01 fa02 fa03 fa04 fa05 fa06 fa07 fa08',
+    );
+  });
+
+  await test('all hard delimiters use the first structural separator', () => {
+    const delimiters = ['|', '\t', ',', ';', '，', '；'];
+    const laterNoise = [';', '|', '；', ',', '\t', '，'];
+
+    delimiters.forEach((delimiter, index) => {
+      const harness = createHarness();
+      harness.elements.inputText.value = [
+        'user@gmail.com',
+        'Pass123',
+        'recovery@gmail.com',
+        `fa01 fa02 fa03 fa04 账号凭证获取成功${laterNoise[index]}tail`,
+      ].join(delimiter);
+      harness.context.handleInput();
+
+      assert.strictEqual(
+        harness.elements.outputText.value,
+        'user@gmail.com---Pass123---recovery@gmail.com---fa01 fa02 fa03 fa04',
+        `delimiter ${JSON.stringify(delimiter)}`,
+      );
+    });
+  });
+
+  await test('pipe conversion keeps double dashes inside account and password fields', () => {
+    const harness = createHarness();
+
+    harness.elements.inputText.value = 'user--tag@gmail.com|Pass--word|recovery@gmail.com|ABCDEFGHIJKLMNOP234567';
+    harness.context.handleInput();
+
+    assert.strictEqual(
+      harness.elements.outputText.value,
+      'user--tag@gmail.com---Pass--word---recovery@gmail.com---ABCDEFGHIJKLMNOP234567',
+    );
+  });
+
+  await test('rows containing the output delimiter inside a field are skipped safely', () => {
+    const harness = createHarness();
+
+    harness.elements.inputText.value = 'user@gmail.com|Pass---word|recovery@gmail.com|ABCDEFGHIJKLMNOP234567';
+    harness.context.handleInput();
+
+    assert.strictEqual(harness.elements.outputText.value, '');
+    assert.strictEqual(harness.elements.outputPanel.style.display, 'none');
+  });
+
+  await test('pipe conversion supports a non-email account with a recovery email', () => {
+    const harness = createHarness();
+
+    harness.elements.inputText.value = 'plainuser|Pass123|recovery@gmail.com|ABCDEFGHIJKLMNOP234567';
+    harness.context.handleInput();
+
+    assert.strictEqual(
+      harness.elements.outputText.value,
+      'plainuser---Pass123---recovery@gmail.com---ABCDEFGHIJKLMNOP234567',
     );
   });
 
@@ -298,6 +383,42 @@ async function test(name, fn) {
     assert.strictEqual(
       harness.elements.outputText.value,
       'original@example.com---OldPass123---helper@example.net---fa01 fa02 fa03 fa04 fa05 fa06 fa07 fa08',
+    );
+  });
+
+  await test('2FA change receipt supports a physical newline inside an eight-group 2FA', () => {
+    const harness = createHarness();
+
+    harness.elements.inputText.value = 'original@example.com|OldPass123|helper@example.net|old1 old2 old3 old4 old5 old6 old7 old8|2024|Germany 订阅成功 2026-08-04 02:51:00 2fa修改成功 original@example.com--OldPass123--fa01 fa02 fa03 fa04\nfa05 fa06 fa07 fa08 账号凭证获取成功';
+    harness.context.handleInput();
+
+    assert.strictEqual(
+      harness.elements.outputText.value,
+      'original@example.com---OldPass123---helper@example.net---fa01 fa02 fa03 fa04 fa05 fa06 fa07 fa08',
+    );
+  });
+
+  await test('2FA change receipt recognizes equivalent success wording', () => {
+    const harness = createHarness();
+
+    harness.elements.inputText.value = 'original@example.com|OldPass123|helper@example.net|old1 old2 old3 old4|2024|Germany 订阅成功 2026-08-04 02:51:00 2FA 更改成功 original@example.com--OldPass123--fa01 fa02 fa03 fa04 账号凭证获取成功';
+    harness.context.handleInput();
+
+    assert.strictEqual(
+      harness.elements.outputText.value,
+      'original@example.com---OldPass123---helper@example.net---fa01 fa02 fa03 fa04',
+    );
+  });
+
+  await test('2FA change receipt recognizes full-width success wording', () => {
+    const harness = createHarness();
+
+    harness.elements.inputText.value = 'original@example.com|OldPass123|helper@example.net|old1 old2 old3 old4|2024|Germany 订阅成功 2026-08-04 02:51:00 ２ＦＡ 更换完毕 original@example.com--OldPass123--fa01 fa02 fa03 fa04 账号凭证获取成功';
+    harness.context.handleInput();
+
+    assert.strictEqual(
+      harness.elements.outputText.value,
+      'original@example.com---OldPass123---helper@example.net---fa01 fa02 fa03 fa04',
     );
   });
 
@@ -511,6 +632,26 @@ async function test(name, fn) {
     );
   });
 
+  await test('already converted rows do not shift recovery into a missing password', () => {
+    const harness = createHarness();
+
+    harness.elements.inputText.value = 'buyer@gmail.com------helper@gmail.com---abcd efgh ijkl mnop';
+    harness.context.handleInput();
+
+    assert.strictEqual(harness.elements.outputText.value, '');
+    assert.strictEqual(harness.elements.outputPanel.style.display, 'none');
+  });
+
+  await test('pipe rows with an explicit missing password stay skipped', () => {
+    const harness = createHarness();
+
+    harness.elements.inputText.value = 'buyer@gmail.com||helper@gmail.com|ABCDEFGHIJKLMNOP234567';
+    harness.context.handleInput();
+
+    assert.strictEqual(harness.elements.outputText.value, '');
+    assert.strictEqual(harness.elements.outputPanel.style.display, 'none');
+  });
+
   await test('credential matrix keeps fields isolated across receipt variants', () => {
     const passwords = ['Pass!42', 'Pass.)', 'mailpass@example.net', 'Pass,;:#'];
     const tails = [
@@ -544,6 +685,114 @@ async function test(name, fn) {
         `matrix case ${index}`,
       );
     }
+  });
+
+  await test('500-case generated receipt stress matrix preserves every field', () => {
+    const harness = createHarness();
+    const delimiters = ['|', '\t', ',', ';', '，', '；'];
+    const markers = ['2fa修改成功', '2FA 修改成功', '2FA 更改成功', '2fa更换完成', '２ＦＡ 更换完毕'];
+    const tails = [
+      '反重力验证成功 5550102468|https://sms.example.test?token=ExampleSmsApiToken12345',
+      '账号凭证获取成功 {"client_id":"example-client","token":"example-token"}',
+      'Hong Kong 2026 账号凭证获取成功',
+      '2026-08-04 02:51:00 账号凭证获取成功',
+    ];
+
+    for (let index = 0; index < 500; index++) {
+      const delimiter = delimiters[index % delimiters.length];
+      const receiptDelimiter = index % 2 ? '--' : '---';
+      const marker = markers[index % markers.length];
+      const account = index % 9 === 0
+        ? `plainuser${index}`
+        : (index % 7 === 0 ? `user--${index}@example.com` : `user${index}@example.com`);
+      const password = index % 11 === 0
+        ? `mailpass${index}@example.net`
+        : (receiptDelimiter === '---' ? `Pass--${index}.)` : `Pass${index}.)`);
+      const recovery = `helper${index}@example.net`;
+      const groupCount = index % 3 ? 8 : 4;
+      const prefix = String.fromCharCode(97 + (index % 20));
+      const groups = Array.from(
+        { length: groupCount },
+        (_, groupIndex) => `${prefix}${String((index + groupIndex) % 1000).padStart(3, '0')}`,
+      );
+      const oldTwoFactor = 'old1 old2 old3 old4';
+      const original = [account, password, recovery, oldTwoFactor, '2024', 'Germany 订阅成功']
+        .join(delimiter);
+      const receiptHead = `${account}${receiptDelimiter}${password}${receiptDelimiter}`;
+      const tail = tails[index % tails.length];
+      const layout = index % 4;
+      let input;
+
+      if (layout === 0) {
+        input = `${original} 02:51:00 ${marker} ${receiptHead}${groups.join(' ')} ${tail}`;
+      } else if (layout === 1) {
+        input = `${original} 02:51:00 ${marker}\n${receiptHead}${groups.join(' ')} ${tail}`;
+      } else if (layout === 2) {
+        input = `${original}\n02:51:00 ${marker}\n${receiptHead}${groups.join(' ')} ${tail}`;
+      } else if (groupCount === 8) {
+        input = `${original} 02:51:00 ${marker} ${receiptHead}${groups.slice(0, 4).join(' ')}\n${groups.slice(4).join(' ')} ${tail}`;
+      } else {
+        input = `${original} 02:51:00 ${marker} ${receiptHead}${groups.join(' ')} ${tail}`;
+      }
+
+      harness.elements.inputText.value = input;
+      harness.context.handleInput();
+
+      assert.strictEqual(
+        harness.elements.outputText.value,
+        `${account}---${password}---${recovery}---${groups.join(' ')}`,
+        `generated case ${index}`,
+      );
+    }
+  });
+
+  await test('supported converted output is idempotent', () => {
+    const firstHarness = createHarness();
+    const secondHarness = createHarness();
+
+    firstHarness.elements.inputText.value = 'user--tag@gmail.com|Pass--word.)|recovery@gmail.com|fa01 fa02 fa03 fa04 fa05 fa06 fa07 fa08';
+    firstHarness.context.handleInput();
+    secondHarness.elements.inputText.value = firstHarness.elements.outputText.value;
+    secondHarness.context.handleInput();
+
+    assert.strictEqual(
+      secondHarness.elements.outputText.value,
+      firstHarness.elements.outputText.value,
+    );
+  });
+
+  await test('1000-row batch conversion keeps every row', () => {
+    const harness = createHarness();
+    const rows = Array.from(
+      { length: 1000 },
+      (_, index) => `bulk${index}@example.com|Pass${index}.)|helper${index}@example.net|ABCDEFGHIJKLMNOP234567`,
+    );
+
+    harness.elements.inputText.value = rows.join('\n');
+    const startedAt = Date.now();
+    harness.context.handleInput();
+    const durationMs = Date.now() - startedAt;
+    const outputRows = harness.elements.outputText.value.split('\n');
+
+    assert(durationMs < 3000, `1000-row conversion took ${durationMs}ms`);
+    assert.strictEqual(outputRows.length, 1000);
+    assert.strictEqual(
+      outputRows[999],
+      'bulk999@example.com---Pass999.)---helper999@example.net---ABCDEFGHIJKLMNOP234567',
+    );
+  });
+
+  await test('very long trailing log cannot replace the leading 2FA', () => {
+    const harness = createHarness();
+    const longLog = ` ${'x'.repeat(100000)}?token=ExampleSmsApiToken12345`;
+
+    harness.elements.inputText.value = `user@gmail.com--Pass123--fa01 fa02 fa03 fa04${longLog}`;
+    harness.context.handleInput();
+
+    assert.strictEqual(
+      harness.elements.outputText.value,
+      'user@gmail.com---Pass123---fa01 fa02 fa03 fa04',
+    );
   });
 
   await test('input stats count non-empty rows, not trailing blank lines', () => {

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'g-auth-v11';
+const CACHE_NAME = 'g-auth-v12';
 const urlsToCache = [
   './index.html',
   './style.css',
@@ -31,13 +31,33 @@ self.addEventListener('activate', event => {
 });
 
 self.addEventListener('fetch', event => {
+  const request = event.request;
+  const requestUrl = new URL(request.url);
+
+  if (request.method !== 'GET' || requestUrl.origin !== self.location.origin) {
+    return;
+  }
+
+  const isDocumentRequest = request.mode === 'navigate'
+    || request.destination === 'document';
+
+  if (isDocumentRequest) {
+    event.respondWith(
+      fetch(request)
+        .then(response => {
+          const responseCopy = response.clone();
+          return caches.open(CACHE_NAME)
+            .then(cache => cache.put(request, responseCopy))
+            .then(() => response);
+        })
+        .catch(() => caches.match(request)
+          .then(response => response || caches.match('./index.html')))
+    );
+    return;
+  }
+
   event.respondWith(
-    caches.match(event.request)
-      .then(response => {
-        if (response) {
-          return response;
-        }
-        return fetch(event.request);
-      })
+    caches.match(request)
+      .then(response => response || fetch(request))
   );
 });

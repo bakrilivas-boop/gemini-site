@@ -330,13 +330,13 @@
         const modeText = document.getElementById('modeText');
         const toast = document.getElementById('toast');
         let toastTimer = null;
-        const EMAIL_REGEX_SOURCE = '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}';
+        const EMAIL_REGEX_SOURCE = '[A-Za-z0-9._%+-]+@(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\\.)+[A-Za-z]{2,63}';
         const HARD_DELIMITERS = ['|', '\t', ',', ';', '，', '；'];
         const ACCOUNT_LABELS = ['登录账号', '账号', '账户', '邮箱', 'email', 'mail', 'login', 'username', 'user'];
         const PASSWORD_LABELS = ['登录密码', '密码', 'password', 'passwd', 'pass', 'pwd'];
         const RECOVERY_LABELS = ['辅助邮箱', '辅助邮件', '恢复邮箱', '恢复邮件', '备用邮箱', '密保邮箱', 'recovery email', 'recovery mail', 'recovery'];
         const TWO_FACTOR_LABELS = ['google authenticator', 'authenticator', 'two factor', '2fa', 'totp', 'otp', '谷歌验证码', '谷歌验证', '谷歌密钥', '验证密钥', '动态密钥', '两步验证', '二步验证', '2步验证', '验证码', '密钥'];
-        const TWO_FACTOR_CHANGE_PATTERN = /2fa\s*修改成功/i;
+        const TWO_FACTOR_CHANGE_PATTERN = /(?:2|２)\s*[fｆ]\s*[aａ]\s*(?:修改|更改|更换)\s*(?:成功|完成|完毕)/i;
         const ALL_FIELD_LABELS = ACCOUNT_LABELS.concat(PASSWORD_LABELS, RECOVERY_LABELS, TWO_FACTOR_LABELS);
         const ALL_FIELD_LABEL_PATTERN = ALL_FIELD_LABELS
             .slice()
@@ -400,10 +400,10 @@
                     : cleanConvertedCredentialLine(trimmed);
                 const credential = convertedLine ? null : extractCredential(trimmed);
 
-                if (convertedLine) {
-                    convertedLines.push(convertedLine);
-                } else if (credential) {
-                    convertedLines.push(formatCredential(credential));
+                const formattedLine = convertedLine || (credential ? formatCredential(credential) : '');
+
+                if (formattedLine) {
+                    convertedLines.push(formattedLine);
                 } else {
                     skippedCount++;
                 }
@@ -422,7 +422,10 @@
 
         function normalizeCredentialInput(text) {
             const markerJoinedText = text.replace(
-                /(2fa\s*修改成功\s*[：:]?)[ \t]*(?:\r\n|\r|\n)[ \t]*/gi,
+                new RegExp(
+                    `(${TWO_FACTOR_CHANGE_PATTERN.source}\\s*[：:]?)[ \\t]*(?:\\r\\n|\\r|\\n)[ \\t]*`,
+                    'gi',
+                ),
                 '$1 ',
             );
             const physicalLines = markerJoinedText.split(/\r?\n|\r/);
@@ -438,11 +441,12 @@
                 }
 
                 const previousLine = previousIndex >= 0 ? logicalLines[previousIndex] : '';
+                const shouldJoinContinuation = shouldJoinTwoFactorContinuation(previousLine, line);
                 const shouldJoinPrevious = marker
                     && !extractEmails(beforeMarker).length
                     && Boolean(extractCredentialIdentity(previousLine));
 
-                if (shouldJoinPrevious) {
+                if (shouldJoinContinuation || shouldJoinPrevious) {
                     logicalLines[previousIndex] = `${previousLine.trim()} ${line.trim()}`;
                 } else {
                     logicalLines.push(line);
@@ -450,6 +454,33 @@
             });
 
             return logicalLines.join('\n');
+        }
+
+        function shouldJoinTwoFactorContinuation(previousLine, currentLine) {
+            const marker = previousLine.match(TWO_FACTOR_CHANGE_PATTERN);
+            if (!marker || !currentLine.trim()) return false;
+
+            const originalText = previousLine.slice(0, marker.index).trim();
+            const changedText = previousLine.slice(marker.index + marker[0].length).trim();
+            const original = extractCredentialIdentity(originalText);
+            let twoFactorField = original
+                ? findChangedReceiptTwoFactorSource(changedText, original)
+                : '';
+
+            if (!twoFactorField) {
+                const fields = splitHardDelimitedLine(changedText);
+                if (!fields || fields.length < 3) return false;
+                const possibleRecovery = normalizeRecovery(fields[2]);
+                twoFactorField = fields[possibleRecovery ? 3 : 2] || '';
+            }
+
+            const leadingGroups = twoFactorField.match(
+                /^[A-Za-z0-9]{4}(?:[\s-]+[A-Za-z0-9]{4})*(?=$|[\s-]|[^A-Za-z0-9])/
+            )?.[0] || '';
+            const groupCount = (leadingGroups.match(/[A-Za-z0-9]{4}/g) || []).length;
+            const continuationStartsWithGroup = /^[A-Za-z0-9]{4}(?:\b|[\s-])/.test(currentLine.trim());
+
+            return groupCount >= 4 && groupCount < 8 && continuationStartsWithGroup;
         }
 
         function escapeRegex(value) {
@@ -470,7 +501,10 @@
             const originalText = line.slice(0, changeMarker.index).trim();
             const changedText = line.slice(changeMarker.index + changeMarker[0].length).trim();
             const original = extractCredentialIdentity(originalText);
-            const changed = extractStandardCredential(changedText);
+            const anchoredChanged = original
+                ? extractChangedReceiptForOriginal(changedText, original)
+                : null;
+            const changed = anchoredChanged || extractStandardCredential(changedText);
 
             if (!original || !changed) return null;
             if (original.account.toLowerCase() !== changed.account.toLowerCase()) return null;
@@ -482,6 +516,42 @@
                 recovery: original.recovery,
                 twoFactor: changed.twoFactor,
             };
+        }
+
+        function extractChangedReceiptForOriginal(changedText, original) {
+            const twoFactorSource = findChangedReceiptTwoFactorSource(changedText, original);
+            const twoFactor = normalizeTwoFactor(extractTwoFactorSecret(twoFactorSource, false));
+            if (!twoFactor) return null;
+
+            return {
+                account: original.account,
+                password: original.password,
+                recovery: '',
+                twoFactor,
+            };
+        }
+
+        function findChangedReceiptTwoFactorSource(changedText, original) {
+            const cleaned = changedText.trim().replace(/^[\s:：=]+/, '');
+            const delimiters = ['---', '--', ...HARD_DELIMITERS];
+
+            for (const delimiter of delimiters) {
+                const accountEnd = original.account.length;
+                const passwordStart = accountEnd + delimiter.length;
+                const passwordEnd = passwordStart + original.password.length;
+                const twoFactorStart = passwordEnd + delimiter.length;
+                const accountMatches = cleaned.slice(0, accountEnd).toLowerCase()
+                    === original.account.toLowerCase();
+                const firstDelimiterMatches = cleaned.slice(accountEnd, passwordStart) === delimiter;
+                const passwordMatches = cleaned.slice(passwordStart, passwordEnd) === original.password;
+                const secondDelimiterMatches = cleaned.slice(passwordEnd, twoFactorStart) === delimiter;
+
+                if (accountMatches && firstDelimiterMatches && passwordMatches && secondDelimiterMatches) {
+                    return cleaned.slice(twoFactorStart).trim();
+                }
+            }
+
+            return '';
         }
 
         function extractStandardCredential(line) {
@@ -519,7 +589,8 @@
             const labeledPassword = extractLabeledValue(cleaned, PASSWORD_LABELS);
             const labeledRecovery = extractLabeledValue(cleaned, RECOVERY_LABELS);
 
-            const account = normalizeAccount(labeledAccount) || findAccount(cleaned, fields);
+            const account = normalizeAccount(labeledAccount)
+                || findAccount(cleaned, fields, Boolean(hardFields));
             const labeledPasswordValue = normalizePassword(labeledPassword, true);
             const passwordInfo = labeledPasswordValue
                 ? { value: labeledPasswordValue, index: -1 }
@@ -544,11 +615,12 @@
             const parts = [credential.account, credential.password];
             if (credential.recovery) parts.push(credential.recovery);
             parts.push(credential.twoFactor);
+            if (parts.some(part => part.includes('---'))) return '';
             return parts.join('---');
         }
 
         function cleanConvertedCredentialLine(line) {
-            const parts = line.split('---').map(part => part.trim()).filter(Boolean);
+            const parts = line.split('---').map(part => part.trim());
             if (parts.length < 3) return '';
 
             const account = normalizeAccount(parts[0]);
@@ -567,24 +639,64 @@
 
         function splitHardDelimitedLine(line) {
             const trimmed = line.trim().replace(/^\uFEFF/, '');
-            const tripleDashFields = splitExactDashDelimitedLine(trimmed, 3);
-            if (tripleDashFields) return tripleDashFields;
+            const dashSearchStart = findLeadingAccountEmailEnd(trimmed);
+            const delimiterCandidates = [
+                { delimiter: '---', dashCount: 3, index: findExactDashDelimiterIndex(trimmed, 3, dashSearchStart) },
+                { delimiter: '--', dashCount: 2, index: findExactDashDelimiterIndex(trimmed, 2, dashSearchStart) },
+                ...HARD_DELIMITERS.map(delimiter => ({
+                    delimiter,
+                    dashCount: 0,
+                    index: trimmed.indexOf(delimiter),
+                })),
+            ]
+                .filter(candidate => candidate.index >= 0)
+                .sort((left, right) => left.index - right.index);
+            const selected = delimiterCandidates[0];
 
-            const doubleDashFields = splitExactDashDelimitedLine(trimmed, 2);
-            if (doubleDashFields) return doubleDashFields;
-
-            const selectedDelimiter = HARD_DELIMITERS.find(delimiter => trimmed.includes(delimiter));
-
-            if (!selectedDelimiter) return null;
-            return trimmed.split(selectedDelimiter).map(part => cleanFieldValue(part));
+            if (!selected) return null;
+            if (selected.dashCount) {
+                return splitExactDashDelimitedLine(trimmed, selected.dashCount, dashSearchStart);
+            }
+            return trimmed.split(selected.delimiter).map(part => cleanFieldValue(part));
         }
 
-        function splitExactDashDelimitedLine(line, dashCount) {
+        function findLeadingAccountEmailEnd(line) {
+            const email = extractEmails(line)[0] || '';
+            if (!email) return 0;
+
+            const emailIndex = line.toLowerCase().indexOf(email.toLowerCase());
+            const prefix = line.slice(0, emailIndex).trim();
+            const accountLabelPattern = ACCOUNT_LABELS
+                .slice()
+                .sort((left, right) => right.length - left.length)
+                .map(escapeRegex)
+                .join('|');
+            const hasAccountPrefix = !prefix
+                || /^[：:=]+$/.test(prefix)
+                || new RegExp(`^(?:${accountLabelPattern})\\s*[:：=]?$`, 'i').test(prefix);
+
+            return hasAccountPrefix ? emailIndex + email.length : 0;
+        }
+
+        function findExactDashDelimiterIndex(line, dashCount, startIndex = 0) {
+            const delimiter = '-'.repeat(dashCount);
+
+            for (let index = startIndex; index <= line.length - dashCount; index++) {
+                const isExactDelimiter = line.slice(index, index + dashCount) === delimiter
+                    && line[index - 1] !== '-'
+                    && line[index + dashCount] !== '-';
+                if (isExactDelimiter) return index;
+            }
+
+            return -1;
+        }
+
+        function splitExactDashDelimitedLine(line, dashCount, startIndex = 0) {
             const fields = [];
             let fieldStart = 0;
             const delimiter = '-'.repeat(dashCount);
 
-            for (let index = 0; index <= line.length - dashCount; index++) {
+            for (let index = startIndex; index <= line.length - dashCount; index++) {
                 const isExactDelimiter = line.slice(index, index + dashCount) === delimiter
                     && line[index - 1] !== '-'
                     && line[index + dashCount] !== '-';
@@ -663,7 +775,12 @@
             return trimToken(value).replace(/\s+/g, ' ');
         }
 
-        function findAccount(line, fields) {
+        function findAccount(line, fields, preferFirstField = false) {
+            if (preferFirstField) {
+                const firstFieldAccount = normalizeAccount(fields[0]);
+                if (firstFieldAccount) return firstFieldAccount;
+            }
+
             const email = extractEmails(line)[0];
             if (email) return email;
 
@@ -766,7 +883,9 @@
         }
 
         function extractGroupedTwoFactor(value) {
-            const leadingRun = value.match(/^[A-Za-z0-9]{4}(?:[\s-]+[A-Za-z0-9]{4}){3,}/)?.[0] || '';
+            const leadingRun = value.match(
+                /^[A-Za-z0-9]{4}(?:[\s-]+[A-Za-z0-9]{4}){3,}(?=$|[\s-]|[^A-Za-z0-9])/
+            )?.[0] || '';
             if (!leadingRun) return '';
 
             const groups = leadingRun.match(/[A-Za-z0-9]{4}/g) || [];
@@ -779,15 +898,7 @@
                 ? 4
                 : Math.min(groups.length, 8);
 
-            let searchFrom = 0;
-            let endIndex = 0;
-            groups.slice(0, groupCount).forEach(group => {
-                const groupIndex = leadingRun.indexOf(group, searchFrom);
-                endIndex = groupIndex + group.length;
-                searchFrom = endIndex;
-            });
-
-            return leadingRun.slice(0, endIndex);
+            return groups.slice(0, groupCount).join(' ');
         }
 
         function extractOtpAuthSecret(value) {
@@ -889,6 +1000,12 @@
                 document.getElementById('copyWarningBanner').classList.add('show');
                 showToast('请长按全选内容后拷贝', 'error');
             }
+        }
+
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' }).catch(() => {});
+            });
         }
     </script>
 </body>
