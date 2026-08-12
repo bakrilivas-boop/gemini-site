@@ -177,7 +177,7 @@ async function test(name, fn) {
   await test('service worker keeps documents fresh and caches only same-origin GET requests', () => {
     const serviceWorker = fs.readFileSync('sw.js', 'utf8');
 
-    assert(serviceWorker.includes("const CACHE_NAME = 'g-auth-v15'"));
+    assert(serviceWorker.includes("const CACHE_NAME = 'g-auth-v16'"));
     assert(serviceWorker.includes("request.method !== 'GET'"));
     assert(serviceWorker.includes('requestUrl.origin !== self.location.origin'));
     assert(serviceWorker.includes("request.mode === 'navigate'"));
