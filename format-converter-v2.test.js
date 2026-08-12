@@ -158,6 +158,7 @@ async function test(name, fn) {
   await test('service worker keeps documents fresh and caches only same-origin GET requests', () => {
     const serviceWorker = fs.readFileSync('sw.js', 'utf8');
 
+    assert(serviceWorker.includes("const CACHE_NAME = 'g-auth-v13'"));
     assert(serviceWorker.includes("request.method !== 'GET'"));
     assert(serviceWorker.includes('requestUrl.origin !== self.location.origin'));
     assert(serviceWorker.includes("request.mode === 'navigate'"));
@@ -170,6 +171,13 @@ async function test(name, fn) {
 
     assert(html.includes("navigator.serviceWorker.register('./sw.js'"));
     assert(html.includes("updateViaCache: 'none'"));
+  });
+
+  await test('homepage and converter stay in sync', () => {
+    assert.strictEqual(
+      fs.readFileSync('index.html', 'utf8'),
+      fs.readFileSync('format-converter-v2.html', 'utf8'),
+    );
   });
 
   await test('mobile viewport allows pinch zoom', () => {
@@ -327,6 +335,279 @@ async function test(name, fn) {
     assert.strictEqual(
       harness.elements.outputText.value,
       'original@example.com---OldPass123---helper@example.net---new1 new2 new3 new4 new5 new6 new7 new8',
+    );
+  });
+
+  await test('2FA receipt with refresh JSON appends refresh token, phone, and SMS API URL', () => {
+    const harness = createHarness();
+
+    harness.elements.inputText.value = 'original@example.com|OldPass123|helper@example.net|old1 old2 old3 old4|2024|Latvia 订阅成功 2026-07-26 16:11:16 2fa修改成功 original@example.com--OldPass123--fa01 fa02 fa03 fa04 fa05 fa06 fa07 fa08 账号凭证获取成功 {"client_id":"fake-client.apps.example.test","token":"ya29.fake-access-token","refresh_token":"1//fake-refresh-token-value"} 反重力验证成功 5550102468|https://sms.example.test?token=fake-sms-token';
+    harness.context.handleInput();
+
+    assert.strictEqual(
+      harness.elements.outputText.value,
+      'original@example.com---OldPass123---helper@example.net---fa01 fa02 fa03 fa04 fa05 fa06 fa07 fa08---1//fake-refresh-token-value---5550102468---https://sms.example.test?token=fake-sms-token',
+    );
+  });
+
+  await test('tab-separated receipt matches the source export shape', () => {
+    const harness = createHarness();
+    const json = JSON.stringify({
+      client_id: 'fake-client.apps.example.test',
+      client_secret: 'fake-client-secret',
+      token: 'ya29.fake-access-token',
+      refresh_token: '1//tab-shaped-refresh-value',
+      project_id: 'fake-project-id',
+      expiry: '2026-07-26T09:12:03.000Z',
+    });
+
+    harness.elements.inputText.value = [
+      'original@example.com',
+      'OldPass123',
+      'helper@example.net',
+      'old1 old2 old3 old4',
+      '2024',
+      'Latvia',
+      '订阅成功',
+      '2026-07-26 16:11:16',
+      '2fa修改成功',
+      'original@example.com--OldPass123--fa01 fa02 fa03 fa04 fa05 fa06 fa07 fa08',
+      '',
+      '账号凭证获取成功',
+      json,
+      '反重力验证成功',
+      '5550102468|https://sms.example.test?token=fake-sms-token',
+    ].join('\t');
+    harness.context.handleInput();
+
+    assert.strictEqual(
+      harness.elements.outputText.value,
+      'original@example.com---OldPass123---helper@example.net---fa01 fa02 fa03 fa04 fa05 fa06 fa07 fa08---1//tab-shaped-refresh-value---5550102468---https://sms.example.test?token=fake-sms-token',
+    );
+  });
+
+  await test('refresh JSON can span visual line breaks and still appends all fields', () => {
+    const harness = createHarness();
+
+    harness.elements.inputText.value = 'original@example.com|OldPass123|helper@example.net|old1 old2 old3 old4|2024|Latvia 订阅成功 2026-07-26 16:11:16 2fa修改成功 original@example.com--OldPass123--fa01 fa02 fa03 fa04 账号凭证获取成功 {"client_id":"fake-client.apps.example.test",\n"token":"ya29.fake-access-token",\n"refresh_token":"1//multiline-refresh-value"} 反重力验证成功 5550102468|https://sms.example.test?token=fake-sms-token';
+    harness.context.handleInput();
+
+    assert.strictEqual(
+      harness.elements.outputText.value,
+      'original@example.com---OldPass123---helper@example.net---fa01 fa02 fa03 fa04---1//multiline-refresh-value---5550102468---https://sms.example.test?token=fake-sms-token',
+    );
+  });
+
+  await test('JSON object can span multiple physical lines after the receipt', () => {
+    const harness = createHarness();
+
+    harness.elements.inputText.value = [
+      'original@example.com|OldPass123|helper@example.net|old1 old2 old3 old4|2024|Latvia 订阅成功 2026-07-26 16:11:16 2fa修改成功 original@example.com--OldPass123--fa01 fa02 fa03 fa04 账号凭证获取成功 {"client_id":"fake-client.apps.example.test",',
+      '"refresh_token":"1//physical-line-refresh"}',
+      '反重力验证成功 5550102468|https://sms.example.test?token=fake-sms-token',
+    ].join('\n');
+    harness.context.handleInput();
+
+    assert.strictEqual(
+      harness.elements.outputText.value,
+      'original@example.com---OldPass123---helper@example.net---fa01 fa02 fa03 fa04---1//physical-line-refresh---5550102468---https://sms.example.test?token=fake-sms-token',
+    );
+  });
+
+  await test('verification marker, phone, and API URL can each be on a new line', () => {
+    const harness = createHarness();
+    const json = JSON.stringify({ refresh_token: '1//split-verification-value' });
+    harness.elements.inputText.value = [
+      'original@example.com|OldPass123|helper@example.net|old1 old2 old3 old4|2024|Latvia 订阅成功 2fa修改成功 original@example.com--OldPass123--fa01 fa02 fa03 fa04 账号凭证获取成功 ' + json,
+      '反重力验证成功',
+      '5550102468',
+      'https://sms.example.test/api?token=fake-split-api',
+    ].join('\n');
+    harness.context.handleInput();
+
+    assert.strictEqual(
+      harness.elements.outputText.value,
+      'original@example.com---OldPass123---helper@example.net---fa01 fa02 fa03 fa04---1//split-verification-value---5550102468---https://sms.example.test/api?token=fake-split-api',
+    );
+  });
+
+  await test('JSON extension requires all three extra fields', () => {
+    const harness = createHarness();
+
+    harness.elements.inputText.value = 'original@example.com|OldPass123|helper@example.net|old1 old2 old3 old4|2024|Latvia 订阅成功 2026-07-26 16:11:16 2fa修改成功 original@example.com--OldPass123--fa01 fa02 fa03 fa04 账号凭证获取成功 {"refresh_token":"1//refresh-only-value"} 反重力验证成功 5550102468';
+    harness.context.handleInput();
+
+    assert.strictEqual(
+      harness.elements.outputText.value,
+      'original@example.com---OldPass123---helper@example.net---fa01 fa02 fa03 fa04',
+    );
+  });
+
+  await test('2FA receipt without JSON keeps the original four-field format', () => {
+    const harness = createHarness();
+
+    harness.elements.inputText.value = 'original@example.com|OldPass123|helper@example.net|old1 old2 old3 old4|2024|Latvia 订阅成功 2026-07-26 16:11:16 2fa修改成功 original@example.com--OldPass123--fa01 fa02 fa03 fa04 反重力验证成功 5550102468|https://sms.example.test?token=fake-sms-token';
+    harness.context.handleInput();
+
+    assert.strictEqual(
+      harness.elements.outputText.value,
+      'original@example.com---OldPass123---helper@example.net---fa01 fa02 fa03 fa04',
+    );
+  });
+
+  await test('JSON without refresh_token keeps the original four-field format', () => {
+    const harness = createHarness();
+
+    harness.elements.inputText.value = 'original@example.com|OldPass123|helper@example.net|old1 old2 old3 old4|2024|Latvia 订阅成功 2026-07-26 16:11:16 2fa修改成功 original@example.com--OldPass123--fa01 fa02 fa03 fa04 账号凭证获取成功 {"token":"ya29.fake-access-token"} 反重力验证成功 5550102468|https://sms.example.test?token=fake-sms-token';
+    harness.context.handleInput();
+
+    assert.strictEqual(
+      harness.elements.outputText.value,
+      'original@example.com---OldPass123---helper@example.net---fa01 fa02 fa03 fa04',
+    );
+  });
+
+  await test('a non-Google refresh token keeps the original four-field format', () => {
+    const harness = createHarness();
+
+    harness.elements.inputText.value = 'original@example.com|OldPass123|helper@example.net|old1 old2 old3 old4|2024|Latvia 订阅成功 2fa修改成功 original@example.com--OldPass123--fa01 fa02 fa03 fa04 账号凭证获取成功 {"refresh_token":"opaque-refresh-value"} 反重力验证成功 5550102468|https://sms.example.test?token=fake-sms-token';
+    harness.context.handleInput();
+
+    assert.strictEqual(
+      harness.elements.outputText.value,
+      'original@example.com---OldPass123---helper@example.net---fa01 fa02 fa03 fa04',
+    );
+  });
+
+  await test('refresh_token extraction does not confuse access token or URL token', () => {
+    const harness = createHarness();
+
+    harness.elements.inputText.value = 'original@example.com|OldPass123|helper@example.net|old1 old2 old3 old4|2024|Latvia 订阅成功 2026-07-26 16:11:16 2fa修改成功 original@example.com--OldPass123--fa01 fa02 fa03 fa04 账号凭证获取成功 {"token":"ya29.fake-access-token","refresh_token":"1//only-the-refresh-value"} 反重力验证成功 5550102468|https://sms.example.test?token=not-the-refresh-value';
+    harness.context.handleInput();
+
+    assert(harness.elements.outputText.value.includes('---1//only-the-refresh-value---'));
+    assert(!harness.elements.outputText.value.includes('ya29.fake-access-token'));
+    assert(harness.elements.outputText.value.includes('---https://sms.example.test?token=not-the-refresh-value'));
+  });
+
+  await test('complete seven-field output is idempotent', () => {
+    const harness = createHarness();
+
+    harness.elements.inputText.value = 'original@example.com---OldPass123---helper@example.net---fa01 fa02 fa03 fa04---1//opaque-refresh-value---+8613800138000---https://sms.example.test?token=fake-sms-token';
+    harness.context.handleInput();
+
+    assert.strictEqual(
+      harness.elements.outputText.value,
+      'original@example.com---OldPass123---helper@example.net---fa01 fa02 fa03 fa04---1//opaque-refresh-value---+8613800138000---https://sms.example.test?token=fake-sms-token',
+    );
+  });
+
+  await test('international phone formatting is normalized in the extended output', () => {
+    const harness = createHarness();
+
+    harness.elements.inputText.value = 'original@example.com|OldPass123|helper@example.net|old1 old2 old3 old4|2024|Latvia 订阅成功 2fa修改成功 original@example.com--OldPass123--fa01 fa02 fa03 fa04 账号凭证获取成功 {"refresh_token":"1//opaque-refresh-value"} 反重力验证成功 +86 138 0013 8000|https://sms.example.test/api?token=fake-sms-token';
+    harness.context.handleInput();
+
+    assert.strictEqual(
+      harness.elements.outputText.value,
+      'original@example.com---OldPass123---helper@example.net---fa01 fa02 fa03 fa04---1//opaque-refresh-value---+8613800138000---https://sms.example.test/api?token=fake-sms-token',
+    );
+  });
+
+  await test('malformed JSON falls back to the original four-field output', () => {
+    const harness = createHarness();
+
+    harness.elements.inputText.value = 'original@example.com|OldPass123|helper@example.net|old1 old2 old3 old4|2024|Latvia 订阅成功 2fa修改成功 original@example.com--OldPass123--fa01 fa02 fa03 fa04 账号凭证获取成功 {"refresh_token":"unterminated 反重力验证成功 5550102468|https://sms.example.test/api?token=fake-sms-token';
+    harness.context.handleInput();
+
+    assert.strictEqual(
+      harness.elements.outputText.value,
+      'original@example.com---OldPass123---helper@example.net---fa01 fa02 fa03 fa04',
+    );
+  });
+
+  await test('refresh_token text without a JSON object keeps the original four-field output', () => {
+    const harness = createHarness();
+
+    harness.elements.inputText.value = 'original@example.com|OldPass123|helper@example.net|old1 old2 old3 old4|2024|Latvia 订阅成功 2fa修改成功 original@example.com--OldPass123--fa01 fa02 fa03 fa04 账号凭证获取成功 refresh_token:"1//not-json" 反重力验证成功 5550102468|https://sms.example.test/api?token=fake-sms-token';
+    harness.context.handleInput();
+
+    assert.strictEqual(
+      harness.elements.outputText.value,
+      'original@example.com---OldPass123---helper@example.net---fa01 fa02 fa03 fa04',
+    );
+  });
+
+  await test('JSON before the credential-success marker is not treated as supplemental data', () => {
+    const harness = createHarness();
+
+    harness.elements.inputText.value = 'original@example.com|OldPass123|helper@example.net|old1 old2 old3 old4|2024|Latvia 订阅成功 2fa修改成功 original@example.com--OldPass123--fa01 fa02 fa03 fa04 {"refresh_token":"1//before-success-marker"} 账号凭证获取成功 反重力验证成功 5550102468|https://sms.example.test/api?token=fake-sms-token';
+    harness.context.handleInput();
+
+    assert.strictEqual(
+      harness.elements.outputText.value,
+      'original@example.com---OldPass123---helper@example.net---fa01 fa02 fa03 fa04',
+    );
+  });
+
+  await test('a quoted refresh_token without a JSON object keeps the four-field output', () => {
+    const harness = createHarness();
+
+    harness.elements.inputText.value = 'original@example.com|OldPass123|helper@example.net|old1 old2 old3 old4|2024|Latvia 订阅成功 2fa修改成功 original@example.com--OldPass123--fa01 fa02 fa03 fa04 账号凭证获取成功 refresh_token: "1//not-a-json-object" 反重力验证成功 5550102468|https://sms.example.test/api?token=fake-sms-token';
+    harness.context.handleInput();
+
+    assert.strictEqual(
+      harness.elements.outputText.value,
+      'original@example.com---OldPass123---helper@example.net---fa01 fa02 fa03 fa04',
+    );
+  });
+
+  await test('only the top-level JSON refresh_token is exported', () => {
+    const harness = createHarness();
+    const json = JSON.stringify({
+      nested: { refresh_token: '1//nested-refresh-value' },
+      refresh_token: '1//top-level-refresh-value',
+    });
+    harness.elements.inputText.value = 'original@example.com|OldPass123|helper@example.net|old1 old2 old3 old4|2024|Latvia 订阅成功 2fa修改成功 original@example.com--OldPass123--fa01 fa02 fa03 fa04 账号凭证获取成功 ' + json + ' 反重力验证成功 5550102468|https://sms.example.test/api?token=fake-sms-token';
+    harness.context.handleInput();
+
+    assert(harness.elements.outputText.value.includes('---1//top-level-refresh-value---'));
+    assert(!harness.elements.outputText.value.includes('1//nested-refresh-value'));
+  });
+
+  await test('phone extraction tolerates a Chinese prompt between the phone and API URL', () => {
+    const harness = createHarness();
+
+    harness.elements.inputText.value = 'original@example.com|OldPass123|helper@example.net|old1 old2 old3 old4|2024|Latvia 订阅成功 2fa修改成功 original@example.com--OldPass123--fa01 fa02 fa03 fa04 账号凭证获取成功 {"refresh_token":"1//phone-prompt-value"} 反重力验证成功：+86 138 0013 8000 骐证码已发送，请稍候 https://sms.example.test/api?token=fake-phone-prompt';
+    harness.context.handleInput();
+
+    assert.strictEqual(
+      harness.elements.outputText.value,
+      'original@example.com---OldPass123---helper@example.net---fa01 fa02 fa03 fa04---1//phone-prompt-value---+8613800138000---https://sms.example.test/api?token=fake-phone-prompt',
+    );
+  });
+
+  await test('verification extraction ignores URLs before the marker and keeps the first API URL after it', () => {
+    const harness = createHarness();
+
+    harness.elements.inputText.value = 'original@example.com|OldPass123|helper@example.net|old1 old2 old3 old4|2024|Latvia 订阅成功 2fa修改成功 original@example.com--OldPass123--fa01 fa02 fa03 fa04 账号凭证获取成功 {"refresh_token":"1//multi-url-value","help":"https://metadata.example.test/help"} 日志链接 https://before.example.test/log 反重力验证成功 5550102468|https://sms.example.test/first?token=fake-first https://sms.example.test/second?token=fake-second';
+    harness.context.handleInput();
+
+    assert.strictEqual(
+      harness.elements.outputText.value,
+      'original@example.com---OldPass123---helper@example.net---fa01 fa02 fa03 fa04---1//multi-url-value---5550102468---https://sms.example.test/first?token=fake-first',
+    );
+  });
+
+  await test('JSON with a missing phone falls back to the original four-field output', () => {
+    const harness = createHarness();
+
+    harness.elements.inputText.value = 'original@example.com|OldPass123|helper@example.net|old1 old2 old3 old4|2024|Latvia 订阅成功 2fa修改成功 original@example.com--OldPass123--fa01 fa02 fa03 fa04 账号凭证获取成功 {"refresh_token":"1//missing-phone-value"} 反重力验证成功 验证码已发送 https://sms.example.test/api?token=fake-missing-phone';
+    harness.context.handleInput();
+
+    assert.strictEqual(
+      harness.elements.outputText.value,
+      'original@example.com---OldPass123---helper@example.net---fa01 fa02 fa03 fa04',
     );
   });
 

@@ -280,7 +280,7 @@
             </div>
             
             <div class="input-wrapper">
-                <textarea id="inputText" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="请在此粘贴需要转换的内容...&#10;&#10;自动提取账号、密码、可选辅助邮箱和2FA。&#10;没有辅助邮箱时会自动跳过；已是 --- 格式也会自动清洗。" oninput="handleInput()"></textarea>
+                <textarea id="inputText" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="请在此粘贴需要转换的内容...&#10;&#10;自动提取账号、密码、可选辅助邮箱和2FA。&#10;检测到完整 JSON、手机号和接码 API 时追加三项；没有 JSON 仍输出原四字段。&#10;已是 --- 格式也会自动清洗。" oninput="handleInput()"></textarea>
                 <button class="clear-btn" type="button" onclick="clearAll()" title="清空" aria-label="清空">
                     <span class="icon" aria-hidden="true">×</span>
                 </button>
@@ -442,11 +442,15 @@
 
                 const previousLine = previousIndex >= 0 ? logicalLines[previousIndex] : '';
                 const shouldJoinContinuation = shouldJoinTwoFactorContinuation(previousLine, line);
+                const shouldJoinJsonContinuation = hasUnclosedCredentialJson(previousLine)
+                    && looksLikeJsonContinuation(line);
+                const shouldJoinJsonStart = shouldJoinCredentialJsonStart(previousLine, line);
+                const shouldJoinSupplementalContinuation = shouldJoinVerificationContinuation(previousLine, line);
                 const shouldJoinPrevious = marker
                     && !extractEmails(beforeMarker).length
                     && Boolean(extractCredentialIdentity(previousLine));
 
-                if (shouldJoinContinuation || shouldJoinPrevious) {
+                if (shouldJoinContinuation || shouldJoinJsonContinuation || shouldJoinJsonStart || shouldJoinSupplementalContinuation || shouldJoinPrevious) {
                     logicalLines[previousIndex] = `${previousLine.trim()} ${line.trim()}`;
                 } else {
                     logicalLines.push(line);
@@ -454,6 +458,50 @@
             });
 
             return logicalLines.join('\n');
+        }
+
+        function hasUnclosedCredentialJson(value) {
+            const source = String(value || '');
+            const jsonStart = findCredentialJsonStart(source);
+            if (jsonStart < 0) return false;
+
+            return scanJsonObject(source, jsonStart)?.status === 'unclosed';
+        }
+
+        function looksLikeJsonContinuation(value) {
+            const source = String(value || '').trim();
+            return /^(?:[{}\[\],]|"[^"\r\n]*"\s*:|[-+]?\d|true\b|false\b|null\b)/i.test(source);
+        }
+
+        function shouldJoinCredentialJsonStart(previousLine, currentLine) {
+            const previous = String(previousLine || '').trim();
+            const current = String(currentLine || '').trim();
+            if (!previous || !current || !/账号凭证(?:获取)?成功\s*$/i.test(previous)) return false;
+            if (!/^\{/.test(current)) return false;
+            return Boolean(extractCredentialIdentity(previous));
+        }
+
+        function shouldJoinVerificationContinuation(previousLine, currentLine) {
+            const previous = String(previousLine || '').trim();
+            const current = String(currentLine || '').trim();
+            if (!previous || !current || !extractCredentialIdentity(previous)) return false;
+
+            if (findVerificationMarkerIndex(current) === 0) {
+                return /账号凭证(?:获取)?成功/i.test(previous);
+            }
+
+            const markerIndex = findVerificationMarkerIndex(previous);
+            if (markerIndex < 0) return false;
+            const previousTail = previous.slice(markerIndex);
+            const currentTrimmed = current.replace(/^[|,;，；\s]+/, '');
+
+            if (/^https?:\/\//i.test(currentTrimmed)) {
+                return Boolean(extractVerificationPhone(previousTail));
+            }
+
+            if (!/^[+＋]?\d/.test(currentTrimmed) || /@/.test(currentTrimmed)) return false;
+            return !extractVerificationPhone(previousTail)
+                && Boolean(extractVerificationPhone(`反重力验证成功 ${currentTrimmed}`));
         }
 
         function shouldJoinTwoFactorContinuation(previousLine, currentLine) {
@@ -515,6 +563,7 @@
                 password: original.password,
                 recovery: original.recovery,
                 twoFactor: changed.twoFactor,
+                extraFields: extractSupplementalFields(changedText),
             };
         }
 
@@ -577,6 +626,7 @@
                 password: identity.password,
                 recovery: identity.recovery,
                 twoFactor,
+                extraFields: extractSupplementalFields(cleaned),
             };
         }
 
@@ -615,8 +665,151 @@
             const parts = [credential.account, credential.password];
             if (credential.recovery) parts.push(credential.recovery);
             parts.push(credential.twoFactor);
+            if (credential.extraFields) {
+                parts.push(
+                    credential.extraFields.refreshToken,
+                    credential.extraFields.phone,
+                    credential.extraFields.apiUrl,
+                );
+            }
             if (parts.some(part => part.includes('---'))) return '';
             return parts.join('---');
+        }
+
+        function extractSupplementalFields(value) {
+            const source = String(value || '').replace(/\r?\n|\r/g, ' ');
+            const credentialJson = extractCredentialJson(source);
+            if (!credentialJson) return null;
+
+            const refreshToken = normalizeSupplementalToken(credentialJson.value.refresh_token);
+            if (!refreshToken) return null;
+
+            const verificationIndex = findVerificationMarkerIndex(source, credentialJson.end);
+            if (verificationIndex < 0) return null;
+
+            const verificationTail = source.slice(verificationIndex);
+            const phone = extractVerificationPhone(verificationTail);
+            const apiUrl = extractVerificationApiUrl(verificationTail);
+            if (!phone || !apiUrl) return null;
+
+            return { refreshToken, phone, apiUrl };
+        }
+
+        function normalizeSupplementalFields(parts) {
+            if (!Array.isArray(parts) || parts.length < 3) return null;
+            const refreshToken = normalizeSupplementalToken(parts[0]);
+            const phone = String(parts[1] || '').trim();
+            const apiUrl = String(parts[2] || '').trim();
+            if (!/^\+?\d{7,15}$/.test(phone)) return null;
+            if (!/^https?:\/\//i.test(apiUrl)) return null;
+            return { refreshToken, phone, apiUrl };
+        }
+
+        function normalizeSupplementalToken(value) {
+            const token = String(value || '').trim();
+            if (!/^1\/\/\S+$/.test(token) || /[\r\n]|---/.test(token)) return '';
+            if (/^https?:\/\//i.test(token) || /^ya29\./i.test(token)) return '';
+            return token;
+        }
+
+        function extractCredentialJson(value) {
+            const source = String(value || '');
+            const jsonStart = findCredentialJsonStart(source);
+            if (jsonStart < 0) return null;
+            const scanned = scanJsonObject(source, jsonStart);
+            if (!scanned || scanned.status !== 'complete') return null;
+
+            try {
+                const parsed = JSON.parse(scanned.text);
+                if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
+                return { value: parsed, end: scanned.end };
+            } catch (error) {
+                return null;
+            }
+        }
+
+        function findCredentialJsonStart(value) {
+            const source = String(value || '');
+            const marker = source.match(/账号凭证(?:获取)?成功/i);
+            if (!marker) return -1;
+
+            const markerEnd = marker.index + marker[0].length;
+            const afterMarker = source.slice(markerEnd);
+            const opening = afterMarker.match(/^[\s:：=|,，;；]*(\{)/);
+            if (!opening) return -1;
+            return markerEnd + opening[0].lastIndexOf('{');
+        }
+
+        function scanJsonObject(source, jsonStart) {
+            const input = String(source || '');
+            let depth = 0;
+            let inString = false;
+            let escaped = false;
+
+            for (let index = jsonStart; index < input.length; index++) {
+                const character = input[index];
+                if (escaped) {
+                    escaped = false;
+                    continue;
+                }
+                if (character === '\\' && inString) {
+                    escaped = true;
+                    continue;
+                }
+                if (character === '"') {
+                    inString = !inString;
+                    continue;
+                }
+                if (inString) continue;
+                if (character === '{') depth++;
+                if (character === '}') {
+                    depth--;
+                    if (depth === 0) {
+                        return {
+                            status: 'complete',
+                            text: input.slice(jsonStart, index + 1),
+                            end: index + 1,
+                        };
+                    }
+                }
+            }
+
+            return { status: 'unclosed', text: '', end: -1 };
+        }
+
+        function findVerificationMarkerIndex(value, startIndex = 0) {
+            const source = String(value || '').slice(Math.max(0, startIndex));
+            const marker = source.match(
+                /(?:反重力|人机|短信|接码)验证成功/i,
+            );
+            return marker ? Math.max(0, startIndex) + marker.index : -1;
+        }
+
+        function extractVerificationPhone(value) {
+            const afterMarker = String(value || '').replace(
+                /^(?:反重力|人机|短信|接码)验证成功\s*[：:]?\s*/i,
+                '',
+            );
+            const phoneRegion = afterMarker.split(/https?:\/\//i, 1)[0];
+            const matcher = /(?:^|[^\d+＋])([+＋]?(?:\d[\s().-]*){6,14}\d)(?=$|[^\d])/g;
+            let match;
+
+            while ((match = matcher.exec(phoneRegion))) {
+                const raw = match[1].trim();
+                const digits = raw.replace(/\D/g, '');
+                if (digits.length < 7 || digits.length > 15) continue;
+                if (/^\d{4}[-/]\d{1,2}[-/]\d{1,2}/.test(raw)) continue;
+                if (/^\d{1,2}:\d{2}/.test(raw)) continue;
+                return /^[+＋]/.test(raw) ? `+${digits}` : digits;
+            }
+
+            return '';
+        }
+
+        function extractVerificationApiUrl(value) {
+            const match = String(value || '').match(/https?:\/\/[^\s|,;，；]+/i);
+            if (!match) return '';
+            return match[0].replace(/[)\]}>'"。，；,]+$/g, '');
         }
 
         function cleanConvertedCredentialLine(line) {
@@ -634,7 +827,10 @@
             const twoFactor = normalizeTwoFactor(extractTwoFactorSecret(twoFactorSource, false));
             if (!twoFactor) return '';
 
-            return formatCredential({ account, password, recovery, twoFactor });
+            const extraStart = hasRecovery ? 4 : 3;
+            const extraFields = normalizeSupplementalFields(parts.slice(extraStart));
+
+            return formatCredential({ account, password, recovery, twoFactor, extraFields });
         }
 
         function splitHardDelimitedLine(line) {
