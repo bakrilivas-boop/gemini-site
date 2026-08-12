@@ -248,6 +248,17 @@ async function test(name, fn) {
     assert.strictEqual(harness.elements.outputPanel.style.display, 'none');
   });
 
+  await test('mobile mode control centers the toggle without a badge spacer', () => {
+    const html = loadHtml();
+    const mobileRules = html.match(/@media\s*\(max-width:\s*420px\)[\s\S]*?\n\s*}\s*\n\s*<\/style>/i)?.[0] || '';
+
+    assert(mobileRules.includes('.mode-badge:not(.show)'));
+    assert(/\.mode-badge:not\(\.show\)\s*\{[^}]*display\s*:\s*none/i.test(mobileRules));
+    assert(/\.mode-controls\s*\{[^}]*justify-content\s*:\s*center/i.test(mobileRules));
+    assert(/\.format-mode-toggle\s*\{[^}]*margin-inline\s*:\s*auto/i.test(mobileRules));
+    assert(/\.format-mode-toggle\s*\{[^}]*max-width\s*:\s*100%/i.test(mobileRules));
+  });
+
   await test('mobile viewport allows pinch zoom', () => {
     const html = loadHtml();
     const viewport = html.match(/<meta\s+name="viewport"\s+content="([^"]+)"/i)?.[1] || '';

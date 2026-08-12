@@ -285,8 +285,23 @@
             body { padding: 1rem 0.75rem 3rem; }
             .card { padding: 1rem; border-radius: 16px; }
             .section-title { flex-wrap: wrap; gap: 0.6rem; }
-            .mode-controls { width: 100%; }
-            .format-mode-toggle { flex: 1; }
+            .mode-controls {
+                width: 100%;
+                justify-content: center;
+            }
+            /* The help line already states the active mode. Removing the
+               badge from mobile flow keeps the toggle mathematically centered
+               even after input makes the badge visible on desktop. */
+            .mode-badge,
+            .mode-badge:not(.show) {
+                display: none;
+            }
+            .format-mode-toggle {
+                flex: 0 1 auto;
+                width: min(100%, 320px);
+                max-width: 100%;
+                margin-inline: auto;
+            }
             #outputText { padding-right: 1rem; padding-bottom: 4rem; }
             .floating-copy-btn { width: calc(100% - 24px); }
         }
