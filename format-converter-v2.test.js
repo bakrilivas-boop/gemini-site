@@ -158,7 +158,7 @@ async function test(name, fn) {
   await test('service worker keeps documents fresh and caches only same-origin GET requests', () => {
     const serviceWorker = fs.readFileSync('sw.js', 'utf8');
 
-    assert(serviceWorker.includes("const CACHE_NAME = 'g-auth-v13'"));
+    assert(serviceWorker.includes("const CACHE_NAME = 'g-auth-v14'"));
     assert(serviceWorker.includes("request.method !== 'GET'"));
     assert(serviceWorker.includes('requestUrl.origin !== self.location.origin'));
     assert(serviceWorker.includes("request.mode === 'navigate'"));
@@ -431,15 +431,49 @@ async function test(name, fn) {
     );
   });
 
-  await test('JSON extension requires all three extra fields', () => {
+  await test('JSON with refresh_token but no phone or API appends a fifth field', () => {
     const harness = createHarness();
+    const json = JSON.stringify({
+      client_id: 'fake-client.apps.example.test',
+      client_secret: 'fake-client-secret',
+      token: 'ya29.fake-access-token',
+      refresh_token: '1//refresh-only-value',
+      scopes: ['https://www.googleapis.com/auth/userinfo.email'],
+      token_uri: 'https://oauth.example.test/token',
+      project_id: 'fake-project-id',
+      expiry: '2026-08-11T05:54:47.000000+00:00',
+    });
 
-    harness.elements.inputText.value = 'original@example.com|OldPass123|helper@example.net|old1 old2 old3 old4|2024|Latvia 订阅成功 2026-07-26 16:11:16 2fa修改成功 original@example.com--OldPass123--fa01 fa02 fa03 fa04 账号凭证获取成功 {"refresh_token":"1//refresh-only-value"} 反重力验证成功 5550102468';
+    harness.elements.inputText.value = 'original@example.com|OldPass123|helper@example.net|fa01 fa02 fa03 fa04|2024|Uruguay\t订阅成功\t2026-08-11 12:53:56\t\t\t账号凭证获取成功\t' + json + '\t反重力验证成功，';
     harness.context.handleInput();
 
     assert.strictEqual(
       harness.elements.outputText.value,
-      'original@example.com---OldPass123---helper@example.net---fa01 fa02 fa03 fa04',
+      'original@example.com---OldPass123---helper@example.net---fa01 fa02 fa03 fa04---1//refresh-only-value',
+    );
+  });
+
+  await test('JSON appends refresh_token even when no verification marker follows', () => {
+    const harness = createHarness();
+
+    harness.elements.inputText.value = 'original@example.com|OldPass123|helper@example.net|fa01 fa02 fa03 fa04|2024|Uruguay\t订阅成功\t2026-08-11 12:53:56\t账号凭证获取成功\t{"refresh_token":"1//json-only-value"}';
+    harness.context.handleInput();
+
+    assert.strictEqual(
+      harness.elements.outputText.value,
+      'original@example.com---OldPass123---helper@example.net---fa01 fa02 fa03 fa04---1//json-only-value',
+    );
+  });
+
+  await test('JSON appends an available phone when the API URL is absent', () => {
+    const harness = createHarness();
+
+    harness.elements.inputText.value = 'original@example.com|OldPass123|helper@example.net|old1 old2 old3 old4|2024|Latvia 订阅成功 2fa修改成功 original@example.com--OldPass123--fa01 fa02 fa03 fa04 账号凭证获取成功 {"refresh_token":"1//refresh-phone-value"} 反重力验证成功 5550102468';
+    harness.context.handleInput();
+
+    assert.strictEqual(
+      harness.elements.outputText.value,
+      'original@example.com---OldPass123---helper@example.net---fa01 fa02 fa03 fa04---1//refresh-phone-value---5550102468',
     );
   });
 
@@ -499,6 +533,54 @@ async function test(name, fn) {
     assert.strictEqual(
       harness.elements.outputText.value,
       'original@example.com---OldPass123---helper@example.net---fa01 fa02 fa03 fa04---1//opaque-refresh-value---+8613800138000---https://sms.example.test?token=fake-sms-token',
+    );
+  });
+
+  await test('refresh-only five-field output is idempotent', () => {
+    const harness = createHarness();
+
+    harness.elements.inputText.value = 'original@example.com---OldPass123---helper@example.net---fa01 fa02 fa03 fa04---1//refresh-only-value';
+    harness.context.handleInput();
+
+    assert.strictEqual(
+      harness.elements.outputText.value,
+      'original@example.com---OldPass123---helper@example.net---fa01 fa02 fa03 fa04---1//refresh-only-value',
+    );
+  });
+
+  await test('refresh and phone six-field output is idempotent', () => {
+    const harness = createHarness();
+
+    harness.elements.inputText.value = 'original@example.com---OldPass123---helper@example.net---fa01 fa02 fa03 fa04---1//refresh-phone-value---5550102468';
+    harness.context.handleInput();
+
+    assert.strictEqual(
+      harness.elements.outputText.value,
+      'original@example.com---OldPass123---helper@example.net---fa01 fa02 fa03 fa04---1//refresh-phone-value---5550102468',
+    );
+  });
+
+  await test('refresh and API six-field output is idempotent', () => {
+    const harness = createHarness();
+
+    harness.elements.inputText.value = 'original@example.com---OldPass123---helper@example.net---fa01 fa02 fa03 fa04---1//refresh-api-value---https://sms.example.test/api?token=fake-api-only';
+    harness.context.handleInput();
+
+    assert.strictEqual(
+      harness.elements.outputText.value,
+      'original@example.com---OldPass123---helper@example.net---fa01 fa02 fa03 fa04---1//refresh-api-value---https://sms.example.test/api?token=fake-api-only',
+    );
+  });
+
+  await test('refresh-only output without a recovery email is idempotent', () => {
+    const harness = createHarness();
+
+    harness.elements.inputText.value = 'original@example.com---OldPass123---fa01 fa02 fa03 fa04---1//refresh-no-recovery';
+    harness.context.handleInput();
+
+    assert.strictEqual(
+      harness.elements.outputText.value,
+      'original@example.com---OldPass123---fa01 fa02 fa03 fa04---1//refresh-no-recovery',
     );
   });
 
@@ -599,7 +681,7 @@ async function test(name, fn) {
     );
   });
 
-  await test('JSON with a missing phone falls back to the original four-field output', () => {
+  await test('JSON appends an available API URL when the phone is absent', () => {
     const harness = createHarness();
 
     harness.elements.inputText.value = 'original@example.com|OldPass123|helper@example.net|old1 old2 old3 old4|2024|Latvia 订阅成功 2fa修改成功 original@example.com--OldPass123--fa01 fa02 fa03 fa04 账号凭证获取成功 {"refresh_token":"1//missing-phone-value"} 反重力验证成功 验证码已发送 https://sms.example.test/api?token=fake-missing-phone';
@@ -607,7 +689,87 @@ async function test(name, fn) {
 
     assert.strictEqual(
       harness.elements.outputText.value,
-      'original@example.com---OldPass123---helper@example.net---fa01 fa02 fa03 fa04',
+      'original@example.com---OldPass123---helper@example.net---fa01 fa02 fa03 fa04---1//missing-phone-value---https://sms.example.test/api?token=fake-missing-phone',
+    );
+  });
+
+  await test('verification phone and API before the credential JSON are still appended', () => {
+    const harness = createHarness();
+    const json = JSON.stringify({
+      client_id: 'fake-client.apps.example.test',
+      client_secret: 'fake-client-secret',
+      token: 'ya29.fake-access-token',
+      refresh_token: '1//verification-before-json',
+      project_id: 'fake-project-id',
+      expiry: '2026-06-28T04:48:23.000000+00:00',
+    });
+
+    harness.elements.inputText.value = 'original@example.com|OldPass123|helper@example.net|fa01 fa02 fa03 fa04|2024|Uruguay\t订阅成功\t2026-06-28 11:47:14\t反重力验证成功\t5550102468|https://sms.example.test?token=fake-api\t账号凭证获取成功\t' + json + '，';
+    harness.context.handleInput();
+
+    assert.strictEqual(
+      harness.elements.outputText.value,
+      'original@example.com---OldPass123---helper@example.net---fa01 fa02 fa03 fa04---1//verification-before-json---5550102468---https://sms.example.test?token=fake-api',
+    );
+  });
+
+  await test('verification before JSON works without a recovery email', () => {
+    const harness = createHarness();
+    const json = JSON.stringify({
+      client_id: 'fake-client.apps.example.test',
+      token: 'ya29.fake-access-token',
+      refresh_token: '1//before-json-no-recovery',
+      token_uri: 'https://oauth.example.test/token',
+    });
+
+    harness.elements.inputText.value = 'original@example.com|OldPass123|fa01 fa02 fa03 fa04 fa05 fa06 fa07 fa08\t订阅成功\t2026-06-28 11:47:14\t反重力验证成功\t5550102468|https://sms.example.test?token=fake-api\t账号凭证获取成功\t' + json + '，';
+    harness.context.handleInput();
+
+    assert.strictEqual(
+      harness.elements.outputText.value,
+      'original@example.com---OldPass123---fa01 fa02 fa03 fa04 fa05 fa06 fa07 fa08---1//before-json-no-recovery---5550102468---https://sms.example.test?token=fake-api',
+    );
+  });
+
+  await test('JSON token_uri is not used when verification before JSON has no API URL', () => {
+    const harness = createHarness();
+    const json = JSON.stringify({
+      refresh_token: '1//before-json-without-api',
+      token_uri: 'https://oauth.example.test/token',
+    });
+
+    harness.elements.inputText.value = 'original@example.com|OldPass123|helper@example.net|fa01 fa02 fa03 fa04|2024|Uruguay 反重力验证成功 5550102468 账号凭证获取成功 ' + json;
+    harness.context.handleInput();
+
+    assert.strictEqual(
+      harness.elements.outputText.value,
+      'original@example.com---OldPass123---helper@example.net---fa01 fa02 fa03 fa04---1//before-json-without-api---5550102468',
+    );
+  });
+
+  await test('a URL before the verification marker is not used when JSON follows', () => {
+    const harness = createHarness();
+    const json = JSON.stringify({ refresh_token: '1//bounded-before-json' });
+
+    harness.elements.inputText.value = 'original@example.com|OldPass123|helper@example.net|fa01 fa02 fa03 fa04|2024|Uruguay 日志 https://before.example.test/log 反重力验证成功 5550102468|https://sms.example.test?token=fake-api 账号凭证获取成功 ' + json;
+    harness.context.handleInput();
+
+    assert.strictEqual(
+      harness.elements.outputText.value,
+      'original@example.com---OldPass123---helper@example.net---fa01 fa02 fa03 fa04---1//bounded-before-json---5550102468---https://sms.example.test?token=fake-api',
+    );
+  });
+
+  await test('verification text after JSON is preferred over an older marker before it', () => {
+    const harness = createHarness();
+    const json = JSON.stringify({ refresh_token: '1//prefer-after-json' });
+
+    harness.elements.inputText.value = 'original@example.com|OldPass123|helper@example.net|fa01 fa02 fa03 fa04|2024|Uruguay 反重力验证成功 5550101111|https://old.example.test/api 账号凭证获取成功 ' + json + ' 反重力验证成功 5550102222|https://sms.example.test/new';
+    harness.context.handleInput();
+
+    assert.strictEqual(
+      harness.elements.outputText.value,
+      'original@example.com---OldPass123---helper@example.net---fa01 fa02 fa03 fa04---1//prefer-after-json---5550102222---https://sms.example.test/new',
     );
   });
 

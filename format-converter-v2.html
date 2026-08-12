@@ -280,7 +280,7 @@
             </div>
             
             <div class="input-wrapper">
-                <textarea id="inputText" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="请在此粘贴需要转换的内容...&#10;&#10;自动提取账号、密码、可选辅助邮箱和2FA。&#10;检测到完整 JSON、手机号和接码 API 时追加三项；没有 JSON 仍输出原四字段。&#10;已是 --- 格式也会自动清洗。" oninput="handleInput()"></textarea>
+                <textarea id="inputText" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="请在此粘贴需要转换的内容...&#10;&#10;自动提取账号、密码、可选辅助邮箱和2FA。&#10;检测到有效 JSON 时追加 refresh_token；手机号和接码 API 按实际存在项继续追加。&#10;没有 JSON 仍输出原四字段；已是 --- 格式也会自动清洗。" oninput="handleInput()"></textarea>
                 <button class="clear-btn" type="button" onclick="clearAll()" title="清空" aria-label="清空">
                     <span class="icon" aria-hidden="true">×</span>
                 </button>
@@ -666,11 +666,9 @@
             if (credential.recovery) parts.push(credential.recovery);
             parts.push(credential.twoFactor);
             if (credential.extraFields) {
-                parts.push(
-                    credential.extraFields.refreshToken,
-                    credential.extraFields.phone,
-                    credential.extraFields.apiUrl,
-                );
+                parts.push(credential.extraFields.refreshToken);
+                if (credential.extraFields.phone) parts.push(credential.extraFields.phone);
+                if (credential.extraFields.apiUrl) parts.push(credential.extraFields.apiUrl);
             }
             if (parts.some(part => part.includes('---'))) return '';
             return parts.join('---');
@@ -684,24 +682,41 @@
             const refreshToken = normalizeSupplementalToken(credentialJson.value.refresh_token);
             if (!refreshToken) return null;
 
-            const verificationIndex = findVerificationMarkerIndex(source, credentialJson.end);
-            if (verificationIndex < 0) return null;
-
-            const verificationTail = source.slice(verificationIndex);
-            const phone = extractVerificationPhone(verificationTail);
-            const apiUrl = extractVerificationApiUrl(verificationTail);
-            if (!phone || !apiUrl) return null;
+            const verificationRange = findVerificationRangeAroundJson(
+                source,
+                credentialJson.start,
+                credentialJson.end,
+            );
+            const verificationTail = verificationRange
+                ? source.slice(verificationRange.start, verificationRange.end)
+                : '';
+            const phone = verificationTail ? extractVerificationPhone(verificationTail) : '';
+            const apiUrl = verificationTail ? extractVerificationApiUrl(verificationTail) : '';
 
             return { refreshToken, phone, apiUrl };
         }
 
         function normalizeSupplementalFields(parts) {
-            if (!Array.isArray(parts) || parts.length < 3) return null;
+            if (!Array.isArray(parts) || parts.length < 1) return null;
             const refreshToken = normalizeSupplementalToken(parts[0]);
-            const phone = String(parts[1] || '').trim();
-            const apiUrl = String(parts[2] || '').trim();
-            if (!/^\+?\d{7,15}$/.test(phone)) return null;
-            if (!/^https?:\/\//i.test(apiUrl)) return null;
+            if (!refreshToken) return null;
+
+            let phone = '';
+            let apiUrl = '';
+            for (const value of parts.slice(1)) {
+                const field = String(value || '').trim();
+                if (!field) continue;
+                if (!phone && /^\+?\d{7,15}$/.test(field)) {
+                    phone = field;
+                    continue;
+                }
+                if (!apiUrl && /^https?:\/\/\S+$/i.test(field)) {
+                    apiUrl = field;
+                    continue;
+                }
+                return null;
+            }
+
             return { refreshToken, phone, apiUrl };
         }
 
@@ -722,7 +737,7 @@
             try {
                 const parsed = JSON.parse(scanned.text);
                 if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
-                return { value: parsed, end: scanned.end };
+                return { value: parsed, start: jsonStart, end: scanned.end };
             } catch (error) {
                 return null;
             }
@@ -783,6 +798,23 @@
                 /(?:反重力|人机|短信|接码)验证成功/i,
             );
             return marker ? Math.max(0, startIndex) + marker.index : -1;
+        }
+
+        function findVerificationRangeAroundJson(value, jsonStart, jsonEnd) {
+            const source = String(value || '');
+            const afterJson = findVerificationMarkerIndex(source, jsonEnd);
+            if (afterJson >= 0) return { start: afterJson, end: source.length };
+
+            const beforeJson = source.slice(0, Math.max(0, jsonStart)).match(
+                /(?:反重力|人机|短信|接码)验证成功/gi,
+            );
+            if (!beforeJson || !beforeJson.length) return null;
+
+            const lastMarker = beforeJson[beforeJson.length - 1];
+            const lastIndex = source.lastIndexOf(lastMarker, Math.max(0, jsonStart - 1));
+            return lastIndex >= 0
+                ? { start: lastIndex, end: jsonStart }
+                : null;
         }
 
         function extractVerificationPhone(value) {
