@@ -6,7 +6,7 @@
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data:; connect-src 'none'; font-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
     <meta name="referrer" content="no-referrer">
     <title>谷歌账号格式转换器</title>
-    <meta name="description" content="100%本地运行的谷歌账号格式批量转换工具，支持多种分隔符智能识别，隐私安全有保障">
+    <meta name="description" content="100%本地运行的谷歌账号格式批量转换工具，支持旧版四字段与新版扩展格式切换，隐私安全有保障">
     
     <style>
         :root {
@@ -124,6 +124,13 @@
         .section-title .label {
             display: flex; align-items: center; gap: 0.5rem;
         }
+        .mode-controls {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 0.45rem;
+            min-width: 0;
+        }
         
         .mode-badge {
             font-size: 0.75rem; font-weight: 600;
@@ -135,6 +142,35 @@
             transition: opacity 0.3s ease;
         }
         .mode-badge.show { opacity: 1; }
+
+        .format-mode-toggle {
+            border: 1px solid rgba(0, 113, 227, 0.22);
+            border-radius: 999px;
+            background: #f0f8ff;
+            color: var(--accent);
+            padding: 0.42rem 0.75rem;
+            min-height: 32px;
+            font: inherit;
+            font-size: 0.74rem;
+            font-weight: 650;
+            line-height: 1.2;
+            cursor: pointer;
+            transition: background 0.2s, border-color 0.2s, color 0.2s, transform 0.2s;
+            white-space: nowrap;
+        }
+        .format-mode-toggle:hover { background: #e2f1ff; border-color: rgba(0, 113, 227, 0.4); }
+        .format-mode-toggle:active { transform: scale(0.97); }
+        .format-mode-toggle[aria-pressed="true"] {
+            background: #eaf8ef;
+            border-color: rgba(52, 199, 89, 0.35);
+            color: #16843a;
+        }
+        .format-mode-help {
+            font-size: 0.76rem;
+            color: var(--text-secondary);
+            line-height: 1.45;
+            margin-top: -0.15rem;
+        }
 
         /* ─── Textarea Wrappers ─── */
         .input-wrapper, .output-wrapper {
@@ -248,6 +284,9 @@
         @media (max-width: 420px) {
             body { padding: 1rem 0.75rem 3rem; }
             .card { padding: 1rem; border-radius: 16px; }
+            .section-title { flex-wrap: wrap; gap: 0.6rem; }
+            .mode-controls { width: 100%; }
+            .format-mode-toggle { flex: 1; }
             #outputText { padding-right: 1rem; padding-bottom: 4rem; }
             .floating-copy-btn { width: calc(100% - 24px); }
         }
@@ -274,13 +313,25 @@
                 <div class="label">
                     <span class="icon" style="color: var(--text-secondary);" aria-hidden="true">▣</span> 粘贴源数据
                 </div>
-                <div id="modeBadge" class="mode-badge">
-                    <span class="icon" aria-hidden="true">↯</span> <span id="modeText">智能识别</span>
+                <div class="mode-controls">
+                    <div id="modeBadge" class="mode-badge" aria-live="polite">
+                        <span class="icon" aria-hidden="true">↯</span> <span id="modeText">旧版四字段</span>
+                    </div>
+                    <button
+                        id="formatModeToggle"
+                        class="format-mode-toggle"
+                        type="button"
+                        onclick="toggleConversionMode()"
+                        aria-pressed="false"
+                        aria-label="切换到新版扩展格式"
+                        title="切换转换输出格式"
+                    >切换到新版扩展格式</button>
                 </div>
             </div>
+            <p id="formatModeHelp" class="format-mode-help">当前：旧版四字段（账号---密码---辅助邮箱---2FA）。点击按钮可切换到新版扩展格式。</p>
             
             <div class="input-wrapper">
-                <textarea id="inputText" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="请在此粘贴需要转换的内容...&#10;&#10;自动提取账号、密码、可选辅助邮箱和2FA。&#10;检测到有效 JSON 时追加 refresh_token；手机号和接码 API 按实际存在项继续追加。&#10;没有 JSON 仍输出原四字段；已是 --- 格式也会自动清洗。" oninput="handleInput()"></textarea>
+                <textarea id="inputText" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="请在此粘贴需要转换的内容...&#10;&#10;自动提取账号、密码、可选辅助邮箱和2FA。&#10;默认旧版只输出四字段；切换到新版扩展格式后，检测到有效 JSON 才追加 refresh_token，并按实际存在项追加手机号和接码 API。&#10;已是 --- 格式也会自动清洗。" oninput="handleInput()"></textarea>
                 <button class="clear-btn" type="button" onclick="clearAll()" title="清空" aria-label="清空">
                     <span class="icon" aria-hidden="true">×</span>
                 </button>
@@ -328,8 +379,11 @@
         const outputPanel = document.getElementById('outputPanel');
         const modeBadge = document.getElementById('modeBadge');
         const modeText = document.getElementById('modeText');
+        const formatModeToggle = document.getElementById('formatModeToggle');
+        const formatModeHelp = document.getElementById('formatModeHelp');
         const toast = document.getElementById('toast');
         let toastTimer = null;
+        let conversionMode = 'legacy';
         const EMAIL_REGEX_SOURCE = '[A-Za-z0-9._%+-]+@(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\\.)+[A-Za-z]{2,63}';
         const HARD_DELIMITERS = ['|', '\t', ',', ';', '，', '；'];
         const ACCOUNT_LABELS = ['登录账号', '账号', '账户', '邮箱', 'email', 'mail', 'login', 'username', 'user'];
@@ -382,7 +436,7 @@
 
             // 更新徽章
             modeBadge.classList.add('show');
-            modeText.innerText = "智能提纯过滤";
+            modeText.innerText = conversionMode === 'extended' ? '新版扩展格式' : '旧版四字段';
             modeBadge.style.color = "var(--accent)";
             modeBadge.style.background = "#e6f2fd";
 
@@ -665,13 +719,48 @@
             const parts = [credential.account, credential.password];
             if (credential.recovery) parts.push(credential.recovery);
             parts.push(credential.twoFactor);
-            if (credential.extraFields) {
+            if (conversionMode === 'extended' && credential.extraFields) {
                 parts.push(credential.extraFields.refreshToken);
                 if (credential.extraFields.phone) parts.push(credential.extraFields.phone);
                 if (credential.extraFields.apiUrl) parts.push(credential.extraFields.apiUrl);
             }
             if (parts.some(part => part.includes('---'))) return '';
             return parts.join('---');
+        }
+
+        function getConversionMode() {
+            return conversionMode;
+        }
+
+        function setConversionMode(mode) {
+            conversionMode = mode === 'extended' ? 'extended' : 'legacy';
+            const isExtended = conversionMode === 'extended';
+
+            if (formatModeToggle) {
+                formatModeToggle.setAttribute('aria-pressed', String(isExtended));
+                formatModeToggle.innerText = isExtended
+                    ? '切换到旧版四字段'
+                    : '切换到新版扩展格式';
+                formatModeToggle.setAttribute(
+                    'aria-label',
+                    isExtended ? '切换到旧版四字段' : '切换到新版扩展格式',
+                );
+            }
+            if (formatModeHelp) {
+                formatModeHelp.innerText = isExtended
+                    ? '当前：新版扩展格式（基础四字段后追加实际识别到的 refresh_token、手机号和接码 API）。'
+                    : '当前：旧版四字段（账号---密码---辅助邮箱---2FA）。点击按钮可切换到新版扩展格式。';
+            }
+            if (modeText && !inputText.value.trim()) {
+                modeText.innerText = isExtended ? '新版扩展格式' : '旧版四字段';
+            }
+
+            if (inputText) handleInput();
+            return conversionMode;
+        }
+
+        function toggleConversionMode() {
+            return setConversionMode(conversionMode === 'extended' ? 'legacy' : 'extended');
         }
 
         function extractSupplementalFields(value) {
@@ -1165,7 +1254,7 @@
             outputText.value = '';
             outputPanel.style.display = 'none';
             modeBadge.classList.remove('show');
-            modeText.innerText = '智能识别';
+            modeText.innerText = conversionMode === 'extended' ? '新版扩展格式' : '旧版四字段';
             document.getElementById('inputStats').innerHTML = `有效行: <strong>0</strong>`;
             document.getElementById('outputStats').innerHTML = `成功: <strong>0</strong> 行`;
             document.getElementById('skipStats').innerHTML = `忽略: <strong>0</strong> 行`;

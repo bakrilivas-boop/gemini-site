@@ -40,6 +40,13 @@ function createElement(id, calls) {
     textContent: '',
     className: '',
     style: {},
+    attributes: {},
+    setAttribute(name, value) {
+      this.attributes[name] = String(value);
+    },
+    getAttribute(name) {
+      return this.attributes[name] ?? null;
+    },
     classList: createClassList(),
     focus() {
       calls.focused.push(id);
@@ -74,6 +81,9 @@ function createHarness(options = {}) {
     getElementById(id) {
       if (!elements[id]) {
         elements[id] = createElement(id, calls);
+        if (id === 'formatModeToggle') {
+          elements[id].setAttribute('aria-pressed', 'false');
+        }
       }
       return elements[id];
     },
@@ -110,6 +120,15 @@ function createHarness(options = {}) {
 
   vm.createContext(context);
   vm.runInContext(getInlineScript(loadHtml()), context);
+  // Existing parser tests exercise the extended output contract. Production
+  // starts in legacy mode; opt into that mode explicitly when testing it.
+  if (options.skipModeSetup) {
+    // Assert the production default without invoking the public setter.
+  } else if (options.mode) {
+    context.setConversionMode(options.mode);
+  } else {
+    context.setConversionMode('extended');
+  }
   return { calls, context, elements };
 }
 
@@ -158,7 +177,7 @@ async function test(name, fn) {
   await test('service worker keeps documents fresh and caches only same-origin GET requests', () => {
     const serviceWorker = fs.readFileSync('sw.js', 'utf8');
 
-    assert(serviceWorker.includes("const CACHE_NAME = 'g-auth-v14'"));
+    assert(serviceWorker.includes("const CACHE_NAME = 'g-auth-v15'"));
     assert(serviceWorker.includes("request.method !== 'GET'"));
     assert(serviceWorker.includes('requestUrl.origin !== self.location.origin'));
     assert(serviceWorker.includes("request.mode === 'navigate'"));
@@ -178,6 +197,55 @@ async function test(name, fn) {
       fs.readFileSync('index.html', 'utf8'),
       fs.readFileSync('format-converter-v2.html', 'utf8'),
     );
+  });
+
+  await test('format mode toggle is present and defaults to legacy', () => {
+    const html = loadHtml();
+    const toggle = html.match(/<button\s+[^>]*id="formatModeToggle"[^>]*>/i)?.[0] || '';
+
+    assert(toggle);
+    assert(/aria-pressed="false"/i.test(toggle));
+    assert(html.includes('默认旧版只输出四字段'));
+
+    const harness = createHarness({ skipModeSetup: true });
+    assert.strictEqual(harness.context.getConversionMode(), 'legacy');
+    assert.strictEqual(harness.elements.formatModeToggle.getAttribute('aria-pressed'), 'false');
+  });
+
+  await test('switching to extended mode recomputes the current input immediately', () => {
+    const harness = createHarness({ mode: 'legacy' });
+    harness.elements.inputText.value = 'original@example.com|OldPass123|helper@example.net|fa01 fa02 fa03 fa04|2024|Latvia 订阅成功 2fa修改成功 original@example.com--OldPass123--fa01 fa02 fa03 fa04 账号凭证获取成功 {"refresh_token":"1//mode-refresh-value"} 反重力验证成功 5550102468|https://sms.example.test/api?token=fake-mode-api';
+    harness.context.handleInput();
+
+    assert.strictEqual(
+      harness.elements.outputText.value,
+      'original@example.com---OldPass123---helper@example.net---fa01 fa02 fa03 fa04',
+    );
+
+    harness.context.setConversionMode('extended');
+    assert.strictEqual(
+      harness.elements.outputText.value,
+      'original@example.com---OldPass123---helper@example.net---fa01 fa02 fa03 fa04---1//mode-refresh-value---5550102468---https://sms.example.test/api?token=fake-mode-api',
+    );
+    assert.strictEqual(harness.elements.formatModeToggle.getAttribute('aria-pressed'), 'true');
+
+    harness.context.toggleConversionMode();
+    assert.strictEqual(harness.context.getConversionMode(), 'legacy');
+    assert.strictEqual(
+      harness.elements.outputText.value,
+      'original@example.com---OldPass123---helper@example.net---fa01 fa02 fa03 fa04',
+    );
+  });
+
+  await test('switching modes with empty input is safe', () => {
+    const harness = createHarness({ mode: 'legacy' });
+
+    harness.context.handleInput();
+    harness.context.toggleConversionMode();
+
+    assert.strictEqual(harness.context.getConversionMode(), 'extended');
+    assert.strictEqual(harness.elements.outputText.value, '');
+    assert.strictEqual(harness.elements.outputPanel.style.display, 'none');
   });
 
   await test('mobile viewport allows pinch zoom', () => {
