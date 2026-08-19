@@ -250,6 +250,20 @@
         }
         .stats-mini span strong { color: var(--text-primary); font-weight: 600; font-variant-numeric: tabular-nums; }
 
+        .parse-warning-banner {
+            display: none;
+            align-items: flex-start;
+            gap: 0.55rem;
+            padding: 0.72rem 0.85rem;
+            border-radius: 12px;
+            background: #fff8e6;
+            color: #8a6a1c;
+            font-size: 0.78rem;
+            line-height: 1.45;
+        }
+        .parse-warning-banner.show { display: flex; }
+        .parse-warning-banner .icon { color: var(--warning); margin-top: 0.08rem; }
+
         /* ─── Clipboard Warning ─── */
         .clipboard-warning-banner {
             display: none;
@@ -354,6 +368,10 @@
             <div class="stats-mini">
                 <span id="inputStats">有效行: <strong>0</strong></span>
             </div>
+            <div id="parseWarningBanner" class="parse-warning-banner" role="status" aria-live="polite">
+                <span class="icon" aria-hidden="true">!</span>
+                <span>内容已读取，但未识别到完整的账号、密码和 2FA。请检查是否缺少字段或使用了不一致的分隔符。</span>
+            </div>
         </div>
 
         <div class="card" id="outputPanel" style="display: none;">
@@ -443,6 +461,7 @@
                 outputText.value = '';
                 outputPanel.style.display = 'none';
                 modeBadge.classList.remove('show');
+                document.getElementById('parseWarningBanner').classList.remove('show');
                 document.getElementById('copyWarningBanner').classList.remove('show');
                 return;
             }
@@ -483,9 +502,11 @@
                 document.getElementById('outputStats').innerHTML = `成功: <strong style="color:var(--success);">${convertedLines.length}</strong> 行`;
                 document.getElementById('skipStats').innerHTML = `忽略: <strong>${skippedCount}</strong> 行`;
                 outputPanel.style.display = 'flex';
+                document.getElementById('parseWarningBanner').classList.remove('show');
                 document.getElementById('copyWarningBanner').classList.remove('show');
             } else {
                 outputPanel.style.display = 'none';
+                document.getElementById('parseWarningBanner').classList.add('show');
             }
         }
 
@@ -651,7 +672,13 @@
 
         function findChangedReceiptTwoFactorSource(changedText, original) {
             const cleaned = changedText.trim().replace(/^[\s:：=]+/, '');
-            const delimiters = ['---', '--', ...HARD_DELIMITERS];
+            const repeatedDash = findRepeatedDashDelimiter(cleaned, original.account.length);
+            const delimiters = [
+                repeatedDash?.delimiter,
+                '---',
+                '--',
+                ...HARD_DELIMITERS,
+            ].filter((delimiter, index, values) => delimiter && values.indexOf(delimiter) === index);
 
             for (const delimiter of delimiters) {
                 const accountEnd = original.account.length;
@@ -949,7 +976,16 @@
         }
 
         function cleanConvertedCredentialLine(line) {
-            const parts = line.split('---').map(part => part.trim());
+            const trimmed = line.trim().replace(/^\uFEFF/, '');
+            const dashSearchStart = findLeadingAccountEmailEnd(trimmed);
+            const dashDelimiter = findRepeatedDashDelimiter(trimmed, dashSearchStart);
+            if (!dashDelimiter) return '';
+
+            const parts = splitExactDashDelimitedLine(
+                trimmed,
+                dashDelimiter.dashCount,
+                dashSearchStart,
+            );
             if (parts.length < 3) return '';
 
             const account = normalizeAccount(parts[0]);
@@ -964,7 +1000,8 @@
             if (!twoFactor) return '';
 
             const extraStart = hasRecovery ? 4 : 3;
-            const extraFields = normalizeSupplementalFields(parts.slice(extraStart));
+            const extraFields = normalizeSupplementalFields(parts.slice(extraStart))
+                || extractSupplementalFields(trimmed);
 
             return formatCredential({ account, password, recovery, twoFactor, extraFields });
         }
@@ -972,7 +1009,9 @@
         function splitHardDelimitedLine(line) {
             const trimmed = line.trim().replace(/^\uFEFF/, '');
             const dashSearchStart = findLeadingAccountEmailEnd(trimmed);
+            const repeatedDash = findRepeatedDashDelimiter(trimmed, dashSearchStart);
             const delimiterCandidates = [
+                repeatedDash,
                 { delimiter: '---', dashCount: 3, index: findExactDashDelimiterIndex(trimmed, 3, dashSearchStart) },
                 { delimiter: '--', dashCount: 2, index: findExactDashDelimiterIndex(trimmed, 2, dashSearchStart) },
                 ...HARD_DELIMITERS.map(delimiter => ({
@@ -981,7 +1020,7 @@
                     index: trimmed.indexOf(delimiter),
                 })),
             ]
-                .filter(candidate => candidate.index >= 0)
+                .filter(candidate => candidate && candidate.index >= 0)
                 .sort((left, right) => left.index - right.index);
             const selected = delimiterCandidates[0];
 
@@ -990,6 +1029,35 @@
                 return splitExactDashDelimitedLine(trimmed, selected.dashCount, dashSearchStart);
             }
             return trimmed.split(selected.delimiter).map(part => cleanFieldValue(part));
+        }
+
+        function findRepeatedDashDelimiter(line, startIndex = 0) {
+            const source = String(line || '');
+            const runs = [];
+            const counts = new Map();
+            const matcher = /-{2,}/g;
+            let match;
+
+            while ((match = matcher.exec(source))) {
+                if (match.index < Math.max(0, startIndex)) continue;
+                const dashCount = match[0].length;
+                const candidate = {
+                    delimiter: match[0],
+                    dashCount,
+                    index: match.index,
+                };
+                runs.push(candidate);
+                counts.set(dashCount, (counts.get(dashCount) || 0) + 1);
+            }
+
+            const repeatedRuns = runs.filter(candidate => counts.get(candidate.dashCount) >= 2);
+            if (startIndex > 0) {
+                return repeatedRuns.find(candidate => (
+                    /^[\s:：=]*$/.test(source.slice(startIndex, candidate.index))
+                )) || null;
+            }
+
+            return repeatedRuns[0] || null;
         }
 
         function findLeadingAccountEmailEnd(line) {
@@ -1273,6 +1341,7 @@
             document.getElementById('inputStats').innerHTML = `有效行: <strong>0</strong>`;
             document.getElementById('outputStats').innerHTML = `成功: <strong>0</strong> 行`;
             document.getElementById('skipStats').innerHTML = `忽略: <strong>0</strong> 行`;
+            document.getElementById('parseWarningBanner').classList.remove('show');
             document.getElementById('copyWarningBanner').classList.remove('show');
             inputText.focus();
         }

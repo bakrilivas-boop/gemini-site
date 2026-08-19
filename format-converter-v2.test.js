@@ -177,7 +177,7 @@ async function test(name, fn) {
   await test('service worker keeps documents fresh and caches only same-origin GET requests', () => {
     const serviceWorker = fs.readFileSync('sw.js', 'utf8');
 
-    assert(serviceWorker.includes("const CACHE_NAME = 'g-auth-v16'"));
+    assert(serviceWorker.includes("const CACHE_NAME = 'g-auth-v17'"));
     assert(serviceWorker.includes("request.method !== 'GET'"));
     assert(serviceWorker.includes('requestUrl.origin !== self.location.origin'));
     assert(serviceWorker.includes("request.mode === 'navigate'"));
@@ -246,6 +246,20 @@ async function test(name, fn) {
     assert.strictEqual(harness.context.getConversionMode(), 'extended');
     assert.strictEqual(harness.elements.outputText.value, '');
     assert.strictEqual(harness.elements.outputPanel.style.display, 'none');
+  });
+
+  await test('unrecognized input shows a clear parse warning and valid input clears it', () => {
+    const harness = createHarness({ mode: 'legacy' });
+
+    harness.elements.inputText.value = 'incomplete-only';
+    harness.context.handleInput();
+    assert(harness.elements.parseWarningBanner.classList.contains('show'));
+    assert.strictEqual(harness.elements.outputPanel.style.display, 'none');
+
+    harness.elements.inputText.value = 'buyer@example.com----Pass123----helper@example.net----ABCDEFGHIJKLMNOP23456789ABCDEFGH';
+    harness.context.handleInput();
+    assert(!harness.elements.parseWarningBanner.classList.contains('show'));
+    assert.strictEqual(harness.elements.outputPanel.style.display, 'flex');
   });
 
   await test('mobile mode control centers the toggle without a badge spacer', () => {
@@ -395,6 +409,96 @@ async function test(name, fn) {
     );
   });
 
+  await test('four-dash source rows are cleaned instead of silently skipped', () => {
+    const harness = createHarness({ mode: 'legacy' });
+    const delimiter = '----';
+
+    harness.elements.inputText.value = [
+      'buyer@example.com',
+      'Pass123',
+      'helper@example.net',
+      'ABCDEFGHIJKLMNOP23456789ABCDEFGH 订阅成功 2026-08-18 05:31:01 账号凭证获取成功 {"client_id":"example-client"}',
+    ].join(delimiter);
+    harness.context.handleInput();
+
+    assert.strictEqual(
+      harness.elements.outputText.value,
+      'buyer@example.com---Pass123---helper@example.net---ABCDEFGHIJKLMNOP23456789ABCDEFGH',
+    );
+    assert.strictEqual(harness.elements.outputPanel.style.display, 'flex');
+  });
+
+  await test('consistent repeated-dash delimiters from four through sixteen are supported', () => {
+    for (let dashCount = 4; dashCount <= 16; dashCount++) {
+      const harness = createHarness({ mode: 'legacy' });
+      const delimiter = '-'.repeat(dashCount);
+      harness.elements.inputText.value = [
+        'buyer@example.com',
+        'Pa--ss123',
+        'helper@example.net',
+        'ABCDEFGHIJKLMNOP23456789ABCDEFGH trailing log',
+      ].join(delimiter);
+      harness.context.handleInput();
+
+      assert.strictEqual(
+        harness.elements.outputText.value,
+        'buyer@example.com---Pa--ss123---helper@example.net---ABCDEFGHIJKLMNOP23456789ABCDEFGH',
+        `${dashCount}-dash delimiter`,
+      );
+    }
+  });
+
+  await test('repeated dash separators may have surrounding spaces', () => {
+    const harness = createHarness({ mode: 'legacy' });
+    harness.elements.inputText.value = 'buyer@example.com  ----  Pass123  ----  helper@example.net  ----  ABCDEFGHIJKLMNOP23456789ABCDEFGH';
+    harness.context.handleInput();
+
+    assert.strictEqual(
+      harness.elements.outputText.value,
+      'buyer@example.com---Pass123---helper@example.net---ABCDEFGHIJKLMNOP23456789ABCDEFGH',
+    );
+  });
+
+  await test('repeated dashes found only in trailing logs do not replace whitespace fields', () => {
+    const harness = createHarness({ mode: 'legacy' });
+    harness.elements.inputText.value = 'buyer@example.com Pass123 helper@example.net ABCDEFGHIJKLMNOP23456789ABCDEFGH trailing----log----marker';
+    harness.context.handleInput();
+
+    assert.strictEqual(
+      harness.elements.outputText.value,
+      'buyer@example.com---Pass123---helper@example.net---ABCDEFGHIJKLMNOP23456789ABCDEFGH',
+    );
+  });
+
+  await test('extended mode extracts refresh metadata after a four-dash source row', () => {
+    const harness = createHarness({ mode: 'extended' });
+    const json = JSON.stringify({ refresh_token: '1//four-dash-refresh-value' });
+    harness.elements.inputText.value = [
+      'buyer@example.com',
+      'Pass123',
+      'helper@example.net',
+      `ABCDEFGHIJKLMNOP23456789ABCDEFGH 账号凭证获取成功 ${json} 反重力验证成功 5550102468|https://sms.example.test/api?token=fake-four-dash`,
+    ].join('----');
+    harness.context.handleInput();
+
+    assert.strictEqual(
+      harness.elements.outputText.value,
+      'buyer@example.com---Pass123---helper@example.net---ABCDEFGHIJKLMNOP23456789ABCDEFGH---1//four-dash-refresh-value---5550102468---https://sms.example.test/api?token=fake-four-dash',
+    );
+  });
+
+  await test('repeated dash delimiters never shift a missing password into place', () => {
+    for (let dashCount = 2; dashCount <= 16; dashCount++) {
+      const harness = createHarness({ mode: 'legacy' });
+      const delimiter = '-'.repeat(dashCount);
+      harness.elements.inputText.value = `buyer@example.com${delimiter}${delimiter}helper@example.net${delimiter}ABCDEFGHIJKLMNOP23456789ABCDEFGH`;
+      harness.context.handleInput();
+
+      assert.strictEqual(harness.elements.outputText.value, '', `${dashCount}-dash delimiter`);
+      assert.strictEqual(harness.elements.outputPanel.style.display, 'none');
+    }
+  });
+
   await test('double-dash conversion skips metadata when 2FA is missing', () => {
     const harness = createHarness();
 
@@ -409,6 +513,18 @@ async function test(name, fn) {
     const harness = createHarness();
 
     harness.elements.inputText.value = 'original@example.com|OldPass123|helper@example.net|old1 old2 old3 old4 old5 old6 old7 old8|2024|Germany 订阅成功 2026-07-27 06:21:01 2fa修改成功 original@example.com--OldPass123--new1 new2 new3 new4 new5 new6 new7 new8 账号凭证获取成功 {"client_id":"example-client-id.apps.example.test","client_secret":"example-client-secret","token":"example-token"}';
+    harness.context.handleInput();
+
+    assert.strictEqual(
+      harness.elements.outputText.value,
+      'original@example.com---OldPass123---helper@example.net---new1 new2 new3 new4 new5 new6 new7 new8',
+    );
+  });
+
+  await test('2FA change receipt accepts four-dash repeated credential fields', () => {
+    const harness = createHarness({ mode: 'legacy' });
+
+    harness.elements.inputText.value = 'original@example.com|OldPass123|helper@example.net|old1 old2 old3 old4|2024|Germany 订阅成功 2fa修改成功 original@example.com----OldPass123----new1 new2 new3 new4 new5 new6 new7 new8';
     harness.context.handleInput();
 
     assert.strictEqual(
